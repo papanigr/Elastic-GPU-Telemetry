@@ -198,3 +198,69 @@ func (r *CSVReader) GetLineNumber() int {
 func (r *CSVReader) GetHeaders() []string {
 	return r.headers
 }
+
+// ReadAll reads all records from the CSV file and resets to the beginning.
+// Each record gets the current timestamp.
+func (r *CSVReader) ReadAll() ([]*models.TelemetryRecord, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	var records []*models.TelemetryRecord
+
+	for {
+		record, err := r.reader.Read()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, fmt.Errorf("failed to read CSV record at line %d: %w", r.lineNumber, err)
+		}
+		r.lineNumber++
+
+		telemetry, err := r.parseRecord(record)
+		if err != nil {
+			r.logger.Warn().
+				Int("line", r.lineNumber).
+				Err(err).
+				Msg("Failed to parse record, skipping")
+			continue
+		}
+		records = append(records, telemetry)
+	}
+
+	// Reset to beginning for next batch
+	if err := r.resetInternal(); err != nil {
+		return nil, fmt.Errorf("failed to reset after reading all: %w", err)
+	}
+
+	r.logger.Debug().
+		Int("record_count", len(records)).
+		Msg("Read all records from CSV")
+
+	return records, nil
+}
+
+// resetInternal resets the reader without locking (for internal use).
+func (r *CSVReader) resetInternal() error {
+	if r.file != nil {
+		r.file.Close()
+	}
+
+	file, err := os.Open(r.filePath)
+	if err != nil {
+		return fmt.Errorf("failed to reopen CSV file: %w", err)
+	}
+	r.file = file
+	r.reader = csv.NewReader(file)
+	r.lineNumber = 0
+
+	// Skip headers
+	_, err = r.reader.Read()
+	if err != nil {
+		r.file.Close()
+		return fmt.Errorf("failed to read CSV headers: %w", err)
+	}
+	r.lineNumber++
+
+	return nil
+}

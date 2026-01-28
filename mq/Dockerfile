@@ -1,11 +1,11 @@
-# Telemetry Streamer Dockerfile
-# ==============================
+# MQ Broker Dockerfile
+# =====================
 #
 # Multi-stage build with protoc for gRPC code generation.
 # The final image is minimal and production-ready.
 #
-# Build: docker build -t local/telemetry-streamer .
-# Run:   docker run -v /path/to/data:/data local/telemetry-streamer
+# Build: docker build -t local/mq-broker .
+# Run:   docker run -p 8081:8081 -p 8082:8082 local/mq-broker
 
 # =============================================================================
 # Stage 1: Build the Go binary
@@ -44,15 +44,15 @@ RUN if [ ! -f pkg/pb/mq.pb.go ]; then \
 
 # Build the binary
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
-    go build -ldflags="-w -s" -o streamer ./cmd
+    go build -ldflags="-w -s" -o mq-broker ./cmd
 
 # =============================================================================
 # Stage 3: Final minimal image
 # =============================================================================
 FROM alpine:3.19
 
-# Install ca-certificates for HTTPS
-RUN apk --no-cache add ca-certificates tzdata
+# Install ca-certificates for HTTPS and wget for healthcheck
+RUN apk --no-cache add ca-certificates tzdata wget
 
 # Create non-root user
 RUN adduser -D -g '' appuser
@@ -60,28 +60,29 @@ RUN adduser -D -g '' appuser
 WORKDIR /app
 
 # Copy the binary
-COPY --from=builder /build/streamer .
+COPY --from=builder /build/mq-broker .
 
-# Create data directory
-RUN mkdir -p /data && chown -R appuser:appuser /app /data
+# Change ownership
+RUN chown -R appuser:appuser /app
 
 # Switch to non-root user
 USER appuser
 
 # Set environment variables
-# 10 records every 5 seconds, loops continuously via gRPC
-ENV STREAMER_CSV_FILE_PATH=/data/dcgm_metrics.csv
-ENV STREAMER_MQ_BROKER_ADDR=mq-broker:8081
-ENV STREAMER_TOPIC=gpu-telemetry
-ENV STREAMER_STREAM_INTERVAL=5s
-ENV STREAMER_FULL_FILE_BATCH=false
-ENV STREAMER_BATCH_SIZE=10
-ENV STREAMER_MQ_ENABLED=true
-ENV STREAMER_LOG_LEVEL=info
+ENV MQ_GRPC_PORT=8081
+ENV MQ_HTTP_PORT=8082
+ENV MQ_MAX_QUEUE_SIZE=10000
+ENV MQ_MAX_MESSAGE_AGE=5m
+ENV MQ_ACK_TIMEOUT=30s
+ENV MQ_CLEANUP_INTERVAL=10s
+ENV MQ_LOG_LEVEL=info
 
-# Health check - the streamer doesn't expose HTTP, so we check the process
+# Expose ports (gRPC and HTTP admin)
+EXPOSE 8081 8082
+
+# Health check (uses HTTP admin port)
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
-    CMD pgrep streamer || exit 1
+    CMD wget -q --spider http://localhost:8082/health || exit 1
 
-# Run the streamer
-CMD ["./streamer"]
+# Run the broker
+CMD ["./mq-broker"]

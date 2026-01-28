@@ -1,11 +1,11 @@
-# Telemetry Streamer Service Makefile
-# ====================================
+# MQ Broker Service Makefile
+# ===========================
 #
-# This Makefile is self-contained for the Streamer microservice.
-# Run all commands from the streamer/ directory.
+# This Makefile is self-contained for the MQ Broker microservice.
+# Run all commands from the mq/ directory.
 #
 
-.PHONY: all build test test-cover run run-mq docker clean help proto proto-install
+.PHONY: all build test run docker clean help proto proto-install
 
 # Go parameters
 GOCMD=go
@@ -21,18 +21,15 @@ PROTO_DIR=proto
 PB_DIR=pkg/pb
 
 # Service name
-SERVICE_NAME=streamer
+SERVICE_NAME=mq-broker
 
 # Binary output
 BIN_DIR=bin
 BIN_NAME=$(BIN_DIR)/$(SERVICE_NAME)
 
 # Docker
-DOCKER_IMAGE=local/telemetry-$(SERVICE_NAME)
+DOCKER_IMAGE=local/$(SERVICE_NAME)
 VERSION?=latest
-
-# Data file path (relative to streamer folder)
-DATA_FILE=./data/dcgm_metrics.csv
 
 # Default target
 all: proto fmt vet test build
@@ -71,7 +68,7 @@ proto-check:
 		$(MAKE) proto; \
 	fi
 
-## build: Build the streamer binary
+## build: Build the MQ broker binary
 build: proto-check
 	@echo "Building $(SERVICE_NAME)..."
 	@mkdir -p $(BIN_DIR)
@@ -89,10 +86,6 @@ test-cover:
 	$(GOCMD) tool cover -html=coverage.out -o coverage.html
 	@echo "Coverage report: coverage.html"
 
-## test-cover-report: Show coverage percentage
-test-cover-report: test-cover
-	@$(GOCMD) tool cover -func=coverage.out | tail -1
-
 ## fmt: Format code
 fmt:
 	@echo "Formatting code..."
@@ -108,36 +101,13 @@ mod-tidy:
 	@echo "Tidying modules..."
 	$(GOMOD) tidy
 
-## run: Run the streamer locally (MQ disabled, 10 records every 5s)
+## run: Run the MQ broker locally
 run: build
 	@echo "Running $(SERVICE_NAME)..."
-	STREAMER_CSV_FILE_PATH=$(DATA_FILE) \
-	STREAMER_MQ_ENABLED=false \
-	STREAMER_LOG_LEVEL=info \
-	STREAMER_STREAM_INTERVAL=5s \
-	STREAMER_BATCH_SIZE=10 \
-	./$(BIN_NAME)
-
-## run-mq: Run the streamer with MQ enabled (10 records every 5s via gRPC on port 8081)
-run-mq: build
-	@echo "Running $(SERVICE_NAME) with MQ (gRPC)..."
-	STREAMER_CSV_FILE_PATH=$(DATA_FILE) \
-	STREAMER_MQ_BROKER_ADDR=localhost:8081 \
-	STREAMER_MQ_ENABLED=true \
-	STREAMER_LOG_LEVEL=info \
-	STREAMER_STREAM_INTERVAL=5s \
-	STREAMER_BATCH_SIZE=10 \
-	STREAMER_FULL_FILE_BATCH=false \
-	./$(BIN_NAME)
-
-## run-single: Run the streamer sending 1 record per second (for testing)
-run-single: build
-	@echo "Running $(SERVICE_NAME) in single record mode..."
-	STREAMER_CSV_FILE_PATH=$(DATA_FILE) \
-	STREAMER_MQ_ENABLED=false \
-	STREAMER_LOG_LEVEL=debug \
-	STREAMER_STREAM_INTERVAL=1s \
-	STREAMER_BATCH_SIZE=1 \
+	MQ_GRPC_PORT=8081 \
+	MQ_HTTP_PORT=8082 \
+	MQ_LOG_LEVEL=debug \
+	MQ_MAX_QUEUE_SIZE=10000 \
 	./$(BIN_NAME)
 
 ## docker: Build Docker image (includes proto generation)
@@ -148,7 +118,7 @@ docker:
 ## docker-run: Run Docker container
 docker-run:
 	@echo "Running Docker container..."
-	docker run --rm -v $(PWD)/data:/data $(DOCKER_IMAGE):latest
+	docker run --rm -p 8081:8081 -p 8082:8082 $(DOCKER_IMAGE):latest
 
 ## clean: Clean build artifacts
 clean:
@@ -159,18 +129,17 @@ clean:
 
 ## help: Show this help message
 help:
-	@echo "Telemetry Streamer - Available targets:"
+	@echo "MQ Broker - Available targets:"
 	@echo ""
 	@echo "  proto-install   Install protoc Go plugins (run once)"
 	@echo "  proto           Generate Go code from proto files"
-	@echo "  build           Build the streamer binary"
+	@echo "  build           Build the broker binary"
 	@echo "  test            Run tests"
 	@echo "  test-cover      Run tests with coverage"
 	@echo "  fmt             Format code"
 	@echo "  vet             Run go vet"
 	@echo "  mod-tidy        Tidy go modules"
-	@echo "  run             Run locally (MQ disabled)"
-	@echo "  run-mq          Run locally with MQ (gRPC)"
+	@echo "  run             Run locally"
 	@echo "  docker          Build Docker image"
 	@echo "  docker-run      Run Docker container"
 	@echo "  clean           Clean build artifacts"

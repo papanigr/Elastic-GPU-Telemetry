@@ -21,9 +21,10 @@ func main() {
 	logger := setupLogger(config.LogLevel)
 	logger.Info().
 		Str("csv_file", config.CSVFilePath).
-		Str("mq_broker_url", config.MQBrokerURL).
+		Str("mq_broker_addr", config.MQBrokerAddr).
 		Str("topic", config.Topic).
 		Dur("stream_interval", config.StreamInterval).
+		Bool("full_file_batch", config.FullFileBatch).
 		Int("batch_size", config.BatchSize).
 		Bool("mq_enabled", config.MQEnabled).
 		Msg("Starting Telemetry Streamer")

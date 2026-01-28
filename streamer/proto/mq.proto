@@ -1,0 +1,39 @@
+syntax = "proto3";
+
+package mq;
+
+option go_package = "github.com/gpu-telemetry-pipeline/streamer/pkg/pb";
+
+import "google/protobuf/timestamp.proto";
+
+// MQService defines the gRPC service for message queue operations.
+service MQService {
+  // Publish sends a message to a topic.
+  rpc Publish(PublishRequest) returns (PublishResponse);
+  
+  // Health check
+  rpc Health(HealthRequest) returns (HealthResponse);
+}
+
+// PublishRequest is the request to publish a message.
+message PublishRequest {
+  string topic = 1;
+  string id = 2;
+  bytes payload = 3;  // JSON-encoded telemetry data
+  google.protobuf.Timestamp timestamp = 4;
+}
+
+// PublishResponse is the response after publishing.
+message PublishResponse {
+  string status = 1;
+  string message_id = 2;
+}
+
+// HealthRequest is the health check request.
+message HealthRequest {}
+
+// HealthResponse is the health check response.
+message HealthResponse {
+  string status = 1;
+  string timestamp = 2;
+}

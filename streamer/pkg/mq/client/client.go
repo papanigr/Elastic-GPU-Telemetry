@@ -91,7 +91,7 @@ func (c *Client) Publish(ctx context.Context, topic string, record models.Teleme
 				Int("attempt", attempt).
 				Dur("delay", delay).
 				Msg("Retrying publish")
-			
+
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
@@ -154,14 +154,15 @@ func NewNoOpPublisher(logger zerolog.Logger) *NoOpPublisher {
 	}
 }
 
-// Publish logs the message but doesn't actually send it anywhere.
+// Publish logs the message but doesn't send it (for testing when MQ is disabled).
 func (p *NoOpPublisher) Publish(ctx context.Context, topic string, record models.TelemetryRecord) error {
 	p.logger.Debug().
 		Str("topic", topic).
 		Str("metric", record.MetricName).
 		Str("gpu_uuid", record.UUID).
 		Float64("value", record.Value).
-		Msg("NoOp publish (message not sent)")
+		Time("timestamp", record.Timestamp).
+		Msg("NoOp publish (MQ disabled)")
 	return nil
 }
 

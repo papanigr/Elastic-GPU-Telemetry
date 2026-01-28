@@ -34,19 +34,21 @@ func New(config Config, logger zerolog.Logger) (*Streamer, error) {
 		return nil, fmt.Errorf("failed to create CSV reader: %w", err)
 	}
 
-	// Create MQ publisher
+	// Create MQ publisher using gRPC
 	var publisher client.Publisher
 	if config.MQEnabled {
-		mqConfig := client.Config{
-			BrokerURL:     config.MQBrokerURL,
-			Timeout:       10 * time.Second,
-			RetryAttempts: 3,
-			RetryDelay:    100 * time.Millisecond,
+		grpcConfig := client.GRPCConfig{
+			BrokerAddr: config.MQBrokerAddr,
+			Timeout:    10 * time.Second,
 		}
-		publisher = client.NewClient(mqConfig, logger)
+		grpcClient, err := client.NewGRPCClient(grpcConfig, logger)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create gRPC client: %w", err)
+		}
+		publisher = grpcClient
 		logger.Info().
-			Str("broker_url", config.MQBrokerURL).
-			Msg("MQ publisher enabled")
+			Str("broker_addr", config.MQBrokerAddr).
+			Msg("MQ publisher enabled (gRPC)")
 	} else {
 		publisher = client.NewNoOpPublisher(logger)
 		logger.Warn().Msg("MQ publisher disabled, using NoOp publisher")
@@ -103,7 +105,49 @@ func (s *Streamer) Run(ctx context.Context) error {
 
 // streamBatch reads and publishes a batch of telemetry records.
 func (s *Streamer) streamBatch(ctx context.Context) error {
-	for i := 0; i < s.config.BatchSize; i++ {
+	if s.config.FullFileBatch {
+		return s.streamFullFile(ctx)
+	}
+	return s.streamNRecords(ctx, s.config.BatchSize)
+}
+
+// streamFullFile reads and publishes all records from the CSV file.
+func (s *Streamer) streamFullFile(ctx context.Context) error {
+	records, err := s.csvReader.ReadAll()
+	if err != nil {
+		return fmt.Errorf("failed to read all records: %w", err)
+	}
+
+	s.logger.Info().
+		Int("record_count", len(records)).
+		Msg("Streaming full file batch")
+
+	for _, record := range records {
+		// Check context periodically
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+
+		// Publish to message queue
+		if err := s.publisher.Publish(ctx, s.config.Topic, *record); err != nil {
+			return fmt.Errorf("failed to publish record: %w", err)
+		}
+
+		s.recordsStreamed.Add(1)
+	}
+
+	s.logger.Info().
+		Int("records_sent", len(records)).
+		Msg("Full file batch completed")
+
+	return nil
+}
+
+// streamNRecords reads and publishes N records.
+func (s *Streamer) streamNRecords(ctx context.Context, n int) error {
+	for i := 0; i < n; i++ {
 		// Check context before each record
 		select {
 		case <-ctx.Done():
