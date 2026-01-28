@@ -95,7 +95,8 @@ mq/
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `MQ_PORT` | `8081` | HTTP server port |
+| `MQ_GRPC_PORT` | `8081` | gRPC server port (inter-service) |
+| `MQ_HTTP_PORT` | `8082` | HTTP server port (admin APIs) |
 | `MQ_MAX_QUEUE_SIZE` | `10000` | Max messages per topic |
 | `MQ_MAX_MESSAGE_AGE` | `5m` | Drop messages older than this |
 | `MQ_ACK_TIMEOUT` | `30s` | Redeliver if no ACK within this time |
@@ -145,48 +146,50 @@ make docker-run
 
 ## Example Usage
 
-### Publish a message
+**Note:** HTTP admin APIs are on port **8082**. gRPC (for streamer/collector) is on port **8081**.
+
+### Publish a message (via HTTP - for testing)
 ```bash
-curl -X POST http://localhost:8081/api/v1/topics/gpu-telemetry/messages \
+curl -X POST http://localhost:8082/api/v1/topics/gpu-telemetry/messages \
   -H "Content-Type: application/json" \
   -d '{"payload": {"metric": "gpu_util", "value": 85}}'
 ```
 
 ### Subscribe a consumer
 ```bash
-curl -X POST http://localhost:8081/api/v1/topics/gpu-telemetry/subscribe \
+curl -X POST http://localhost:8082/api/v1/topics/gpu-telemetry/subscribe \
   -H "Content-Type: application/json" \
   -d '{"consumer_id": "collector-1", "group": "collectors"}'
 ```
 
 ### Consume messages
 ```bash
-curl "http://localhost:8081/api/v1/topics/gpu-telemetry/messages?consumer_id=collector-1&group=collectors&max_messages=10"
+curl "http://localhost:8082/api/v1/topics/gpu-telemetry/messages?consumer_id=collector-1&group=collectors&max_messages=10"
 ```
 
 ### Acknowledge messages
 ```bash
-curl -X POST http://localhost:8081/api/v1/topics/gpu-telemetry/ack \
+curl -X POST http://localhost:8082/api/v1/topics/gpu-telemetry/ack \
   -H "Content-Type: application/json" \
   -d '{"consumer_id": "collector-1", "message_ids": ["msg-id-1", "msg-id-2"]}'
 ```
 
 ### View topic stats (Admin)
 ```bash
-curl http://localhost:8081/admin/topics/gpu-telemetry/stats
+curl http://localhost:8082/admin/topics/gpu-telemetry/stats
 ```
 
 ### View messages (Admin)
 ```bash
-curl "http://localhost:8081/admin/topics/gpu-telemetry/messages?limit=10"
+curl "http://localhost:8082/admin/topics/gpu-telemetry/messages?limit=10"
 ```
 
 ### Delete a message (Admin)
 ```bash
-curl -X DELETE http://localhost:8081/admin/topics/gpu-telemetry/messages/msg-id-1
+curl -X DELETE http://localhost:8082/admin/topics/gpu-telemetry/messages/msg-id-1
 ```
 
 ### Purge all messages (Admin)
 ```bash
-curl -X DELETE http://localhost:8081/admin/topics/gpu-telemetry/messages
+curl -X DELETE http://localhost:8082/admin/topics/gpu-telemetry/messages
 ```
