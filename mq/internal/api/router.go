@@ -17,9 +17,8 @@ func NewRouter(b *broker.Broker, logger zerolog.Logger) *chi.Mux {
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Recoverer)
-	r.Use(middleware.Heartbeat("/health"))
 
-	// Health endpoint
+	// Health endpoint (returns JSON status)
 	r.Get("/health", handler.Health)
 
 	// API v1 routes (HTTP endpoints for message operations)

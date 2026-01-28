@@ -13,9 +13,9 @@ type Message struct {
 	Payload   json.RawMessage `json:"payload"`
 	Timestamp time.Time       `json:"timestamp"`
 	// Internal fields
-	State     MessageState `json:"-"`
-	DeliverTo string       `json:"-"` // Consumer ID this message is assigned to
-	DeliveredAt time.Time  `json:"-"`
+	State       MessageState `json:"-"`
+	DeliverTo   string       `json:"-"` // Consumer ID this message is assigned to
+	DeliveredAt time.Time    `json:"-"`
 }
 
 // MessageState represents the state of a message.
@@ -45,9 +45,9 @@ type PublishResponse struct {
 
 // ConsumeRequest is the request for consuming messages.
 type ConsumeRequest struct {
-	ConsumerID string `json:"consumer_id"`
-	Group      string `json:"group"`
-	MaxMessages int   `json:"max_messages,omitempty"`
+	ConsumerID  string `json:"consumer_id"`
+	Group       string `json:"group"`
+	MaxMessages int    `json:"max_messages,omitempty"`
 }
 
 // ConsumeResponse is the response for a consume request.
@@ -82,13 +82,16 @@ type SubscribeResponse struct {
 
 // TopicStats contains statistics about a topic.
 type TopicStats struct {
-	Topic           string        `json:"topic"`
-	QueueSize       int           `json:"queue_size"`
-	MaxSize         int           `json:"max_size"`
-	PendingMessages int           `json:"pending_messages"`
-	ConsumerGroups  int           `json:"consumer_groups"`
-	TotalConsumers  int           `json:"total_consumers"`
-	OldestMessageAge string       `json:"oldest_message_age,omitempty"`
+	Topic            string `json:"topic"`
+	QueueSize        int    `json:"queue_size"`
+	MaxSize          int    `json:"max_size"`
+	PendingMessages  int    `json:"pending_messages"`
+	ConsumerGroups   int    `json:"consumer_groups"`
+	TotalConsumers   int    `json:"total_consumers"`
+	OldestMessageAge string `json:"oldest_message_age,omitempty"`
+	// Graceful degradation metrics
+	DroppedMessages  int64  `json:"dropped_messages"`            // Total dropped due to overflow
+	QueueUtilization string `json:"queue_utilization,omitempty"` // e.g., "60%"
 }
 
 // ConsumerInfo contains information about a consumer.

@@ -108,18 +108,8 @@ mod-tidy:
 	@echo "Tidying modules..."
 	$(GOMOD) tidy
 
-## run: Run the streamer locally (MQ disabled, 10 records every 5s)
+## run: Run the streamer with MQ enabled (10 records every 5s via gRPC on port 8081)
 run: build
-	@echo "Running $(SERVICE_NAME)..."
-	STREAMER_CSV_FILE_PATH=$(DATA_FILE) \
-	STREAMER_MQ_ENABLED=false \
-	STREAMER_LOG_LEVEL=info \
-	STREAMER_STREAM_INTERVAL=5s \
-	STREAMER_BATCH_SIZE=10 \
-	./$(BIN_NAME)
-
-## run-mq: Run the streamer with MQ enabled (10 records every 5s via gRPC on port 8081)
-run-mq: build
 	@echo "Running $(SERVICE_NAME) with MQ (gRPC)..."
 	STREAMER_CSV_FILE_PATH=$(DATA_FILE) \
 	STREAMER_MQ_BROKER_ADDR=localhost:8081 \
@@ -128,6 +118,16 @@ run-mq: build
 	STREAMER_STREAM_INTERVAL=5s \
 	STREAMER_BATCH_SIZE=10 \
 	STREAMER_FULL_FILE_BATCH=false \
+	./$(BIN_NAME)
+
+## dry-run: Run the streamer locally without MQ (console output only, for testing)
+dry-run: build
+	@echo "Running $(SERVICE_NAME) in dry-run mode (no MQ)..."
+	STREAMER_CSV_FILE_PATH=$(DATA_FILE) \
+	STREAMER_MQ_ENABLED=false \
+	STREAMER_LOG_LEVEL=info \
+	STREAMER_STREAM_INTERVAL=5s \
+	STREAMER_BATCH_SIZE=10 \
 	./$(BIN_NAME)
 
 ## run-single: Run the streamer sending 1 record per second (for testing)

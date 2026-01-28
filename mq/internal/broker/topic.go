@@ -19,6 +19,9 @@ type Topic struct {
 	consumerGroups map[string]*ConsumerGroup
 	mu             sync.RWMutex
 	logger         zerolog.Logger
+	
+	// Metrics for graceful degradation monitoring
+	droppedCount   int64  // Total messages dropped due to overflow
 }
 
 // NewTopic creates a new topic.
@@ -38,9 +41,10 @@ func (t *Topic) Publish(msg *models.Message) error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
-	// Check queue size limit
+	// Check queue size limit - graceful degradation via drop-oldest strategy
 	if len(t.messages) >= t.config.MaxQueueSize {
-		// Drop oldest message
+		// Drop oldest message to make room for new telemetry
+		// For real-time telemetry, recent data is more valuable than old data
 		if len(t.messages) > 0 {
 			oldest := t.messages[0]
 			delete(t.messageIndex, oldest.ID)
@@ -49,7 +53,12 @@ func (t *Topic) Publish(msg *models.Message) error {
 			for id, idx := range t.messageIndex {
 				t.messageIndex[id] = idx - 1
 			}
-			t.logger.Warn().Str("dropped_id", oldest.ID).Msg("Queue full, dropped oldest message")
+			t.droppedCount++
+			t.logger.Warn().
+				Str("dropped_id", oldest.ID).
+				Int64("total_dropped", t.droppedCount).
+				Int("queue_size", t.config.MaxQueueSize).
+				Msg("Queue full, dropped oldest message (graceful degradation)")
 		}
 	}
 
@@ -185,14 +194,23 @@ func (t *Topic) GetStats() *models.TopicStats {
 		oldestAge = time.Since(oldestTime).Round(time.Second).String()
 	}
 
+	// Calculate queue utilization percentage
+	utilization := ""
+	if t.config.MaxQueueSize > 0 {
+		pct := float64(len(t.messages)) / float64(t.config.MaxQueueSize) * 100
+		utilization = fmt.Sprintf("%.1f%%", pct)
+	}
+
 	return &models.TopicStats{
-		Topic:           t.name,
-		QueueSize:       len(t.messages),
-		MaxSize:         t.config.MaxQueueSize,
-		PendingMessages: pending,
-		ConsumerGroups:  len(t.consumerGroups),
-		TotalConsumers:  totalConsumers,
+		Topic:            t.name,
+		QueueSize:        len(t.messages),
+		MaxSize:          t.config.MaxQueueSize,
+		PendingMessages:  pending,
+		ConsumerGroups:   len(t.consumerGroups),
+		TotalConsumers:   totalConsumers,
 		OldestMessageAge: oldestAge,
+		DroppedMessages:  t.droppedCount,
+		QueueUtilization: utilization,
 	}
 }
 

@@ -91,11 +91,11 @@ All commands should be run from the `streamer/` directory.
 # Build (uses committed proto files)
 make build
 
-# Run (MQ disabled - for testing CSV reading)
+# Run with MQ enabled (requires MQ broker on localhost:8081)
 make run
 
-# Run with MQ enabled (requires MQ broker on localhost:8081)
-make run-mq
+# Dry run (MQ disabled - for testing CSV reading, console output only)
+make dry-run
 
 # Run tests
 make test
@@ -111,7 +111,7 @@ make test-cover
 cd ../mq && make run
 
 # Terminal 2: Start streamer
-cd ../streamer && make run-mq
+cd ../streamer && make run
 ```
 
 ### Docker
@@ -178,8 +178,8 @@ When deployed to Kubernetes, multiple instances can run simultaneously:
 | `build` | Build the streamer binary |
 | `test` | Run tests |
 | `test-cover` | Run tests with coverage |
-| `run` | Run locally (MQ disabled) |
-| `run-mq` | Run locally with MQ (gRPC) |
+| `run` | Run locally with MQ (gRPC) |
+| `dry-run` | Run locally without MQ (console only) |
 | `docker` | Build Docker image |
 | `docker-run` | Run Docker container |
 | `clean` | Clean build artifacts |
