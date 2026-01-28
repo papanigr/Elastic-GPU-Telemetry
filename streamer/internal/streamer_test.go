@@ -230,10 +230,10 @@ func TestDefaultConfig(t *testing.T) {
 	config := DefaultConfig()
 
 	assert.Equal(t, "/data/dcgm_metrics.csv", config.CSVFilePath)
-	assert.Equal(t, "http://mq-broker:8081", config.MQBrokerURL)
+	assert.Equal(t, "mq-broker:8081", config.MQBrokerAddr)
 	assert.Equal(t, "gpu-telemetry", config.Topic)
-	assert.Equal(t, 100*time.Millisecond, config.StreamInterval)
-	assert.Equal(t, 1, config.BatchSize)
+	assert.Equal(t, 5*time.Second, config.StreamInterval)
+	assert.Equal(t, 10, config.BatchSize)
 	assert.True(t, config.MQEnabled)
 	assert.Equal(t, "info", config.LogLevel)
 }
