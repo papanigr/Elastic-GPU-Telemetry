@@ -19,7 +19,20 @@ import (
 	"github.com/gpu-telemetry-pipeline/mq/pkg/pb"
 	"github.com/rs/zerolog"
 	"google.golang.org/grpc"
+
+	_ "github.com/gpu-telemetry-pipeline/mq/docs" // Auto-generated swagger docs
 )
+
+// @title           MQ Broker API
+// @version         1.0.0
+// @description     Custom Message Queue Broker with topic-based pub/sub, consumer groups, and at-least-once delivery.
+
+// @contact.name    GPU Telemetry Pipeline
+
+// @host            localhost:8082
+// @BasePath        /
+
+// @schemes         http
 
 func main() {
 	// Load configuration

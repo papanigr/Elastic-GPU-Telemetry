@@ -105,6 +105,14 @@ mq/
 
 ## API Endpoints
 
+### Documentation (Auto-Generated)
+
+| Endpoint | Description |
+|----------|-------------|
+| `/swagger/index.html` | Swagger UI (interactive docs) |
+| `/swagger/doc.json` | OpenAPI spec (JSON) |
+| `/health` | Health check |
+
 ### Message Operations
 
 | Endpoint | Method | Description |
@@ -128,7 +136,10 @@ mq/
 ## Build & Run
 
 ```bash
-# Build
+# Generate Swagger docs (auto-generated OpenAPI)
+make swagger
+
+# Build (includes swagger generation)
 make build
 
 # Run locally
@@ -142,6 +153,18 @@ make docker
 
 # Run in Docker
 make docker-run
+```
+
+## Auto-Generated OpenAPI
+
+The OpenAPI specification is **auto-generated** from code annotations using [swaggo/swag](https://github.com/swaggo/swag).
+
+- Swagger UI: http://localhost:8082/swagger/index.html
+- JSON spec: http://localhost:8082/swagger/doc.json
+
+Regenerate after code changes:
+```bash
+make swagger
 ```
 
 ## Example Usage

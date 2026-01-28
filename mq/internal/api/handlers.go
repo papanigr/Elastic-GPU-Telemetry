@@ -28,16 +28,33 @@ func NewHandler(b *broker.Broker, logger zerolog.Logger) *Handler {
 	}
 }
 
-// Health returns the health status.
+// Health godoc
+// @Summary      Health check
+// @Description  Returns the health status of the MQ broker
+// @Tags         Health
+// @Produce      json
+// @Success      200  {object}  models.HealthResponse
+// @Router       /health [get]
 func (h *Handler) Health(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{
-		"status": "healthy",
-		"time":   time.Now().Format(time.RFC3339),
+	json.NewEncoder(w).Encode(models.HealthResponse{
+		Status: "healthy",
+		Time:   time.Now().Format(time.RFC3339),
 	})
 }
 
-// Publish handles message publishing.
+// Publish godoc
+// @Summary      Publish a message
+// @Description  Publishes a message to a topic
+// @Tags         Messages
+// @Accept       json
+// @Produce      json
+// @Param        topic    path      string                true  "Topic name"
+// @Param        message  body      models.PublishRequest true  "Message to publish"
+// @Success      201      {object}  models.PublishResponse
+// @Failure      400      {object}  models.ErrorResponse
+// @Failure      500      {object}  models.ErrorResponse
+// @Router       /api/v1/topics/{topic}/messages [post]
 func (h *Handler) Publish(w http.ResponseWriter, r *http.Request) {
 	topic := chi.URLParam(r, "topic")
 	if topic == "" {
@@ -82,7 +99,18 @@ func (h *Handler) Publish(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// Subscribe handles consumer subscription.
+// Subscribe godoc
+// @Summary      Subscribe to a topic
+// @Description  Subscribes a consumer to a topic within a consumer group
+// @Tags         Consumers
+// @Accept       json
+// @Produce      json
+// @Param        topic        path      string                  true  "Topic name"
+// @Param        subscription body      models.SubscribeRequest true  "Subscription details"
+// @Success      200          {object}  models.SubscribeResponse
+// @Failure      400          {object}  models.ErrorResponse
+// @Failure      500          {object}  models.ErrorResponse
+// @Router       /api/v1/topics/{topic}/subscribe [post]
 func (h *Handler) Subscribe(w http.ResponseWriter, r *http.Request) {
 	topic := chi.URLParam(r, "topic")
 	if topic == "" {
@@ -114,7 +142,18 @@ func (h *Handler) Subscribe(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// Consume handles message consumption.
+// Consume godoc
+// @Summary      Consume messages
+// @Description  Consumes messages from a topic for a consumer
+// @Tags         Messages
+// @Produce      json
+// @Param        topic        path      string  true   "Topic name"
+// @Param        consumer_id  query     string  true   "Consumer ID"
+// @Param        group        query     string  true   "Consumer group"
+// @Param        max_messages query     int     false  "Maximum messages to consume (default 10)"
+// @Success      200          {object}  models.ConsumeResponse
+// @Failure      400          {object}  models.ErrorResponse
+// @Router       /api/v1/topics/{topic}/messages [get]
 func (h *Handler) Consume(w http.ResponseWriter, r *http.Request) {
 	topic := chi.URLParam(r, "topic")
 	if topic == "" {
@@ -150,7 +189,18 @@ func (h *Handler) Consume(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// Ack handles message acknowledgment.
+// Ack godoc
+// @Summary      Acknowledge messages
+// @Description  Acknowledges receipt of messages by a consumer
+// @Tags         Messages
+// @Accept       json
+// @Produce      json
+// @Param        topic  path      string            true  "Topic name"
+// @Param        ack    body      models.AckRequest true  "Acknowledgment details"
+// @Success      200    {object}  models.AckResponse
+// @Failure      400    {object}  models.ErrorResponse
+// @Failure      500    {object}  models.ErrorResponse
+// @Router       /api/v1/topics/{topic}/ack [post]
 func (h *Handler) Ack(w http.ResponseWriter, r *http.Request) {
 	topic := chi.URLParam(r, "topic")
 	if topic == "" {
@@ -184,16 +234,30 @@ func (h *Handler) Ack(w http.ResponseWriter, r *http.Request) {
 
 // --- Admin Endpoints ---
 
-// ListTopics returns all topics.
+// ListTopics godoc
+// @Summary      List all topics
+// @Description  Returns a list of all topics in the broker
+// @Tags         Admin
+// @Produce      json
+// @Success      200  {object}  models.TopicListResponse
+// @Router       /admin/topics [get]
 func (h *Handler) ListTopics(w http.ResponseWriter, r *http.Request) {
 	topics := h.broker.ListTopics()
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"topics": topics,
+	json.NewEncoder(w).Encode(models.TopicListResponse{
+		Topics: topics,
 	})
 }
 
-// GetTopicStats returns statistics for a topic.
+// GetTopicStats godoc
+// @Summary      Get topic statistics
+// @Description  Returns statistics for a specific topic
+// @Tags         Admin
+// @Produce      json
+// @Param        topic  path      string  true  "Topic name"
+// @Success      200    {object}  models.TopicStats
+// @Failure      404    {object}  models.ErrorResponse
+// @Router       /admin/topics/{topic}/stats [get]
 func (h *Handler) GetTopicStats(w http.ResponseWriter, r *http.Request) {
 	topic := chi.URLParam(r, "topic")
 	if topic == "" {
@@ -211,7 +275,15 @@ func (h *Handler) GetTopicStats(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(stats)
 }
 
-// GetMessages returns messages from a topic (admin).
+// GetMessages godoc
+// @Summary      Get messages from topic (admin)
+// @Description  Returns messages from a topic for administrative viewing
+// @Tags         Admin
+// @Produce      json
+// @Param        topic  path      string  true   "Topic name"
+// @Param        limit  query     int     false  "Maximum messages to return (default 100)"
+// @Success      200    {object}  models.MessagesResponse
+// @Router       /admin/topics/{topic}/messages [get]
 func (h *Handler) GetMessages(w http.ResponseWriter, r *http.Request) {
 	topic := chi.URLParam(r, "topic")
 	if topic == "" {
@@ -230,14 +302,23 @@ func (h *Handler) GetMessages(w http.ResponseWriter, r *http.Request) {
 	messages := h.broker.GetMessages(topic, limit)
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"topic":    topic,
-		"count":    len(messages),
-		"messages": messages,
+	json.NewEncoder(w).Encode(models.MessagesResponse{
+		Topic:    topic,
+		Count:    len(messages),
+		Messages: messages,
 	})
 }
 
-// DeleteMessage deletes a specific message.
+// DeleteMessage godoc
+// @Summary      Delete a message
+// @Description  Deletes a specific message from a topic
+// @Tags         Admin
+// @Produce      json
+// @Param        topic      path      string  true  "Topic name"
+// @Param        messageID  path      string  true  "Message ID"
+// @Success      200        {object}  models.DeleteResponse
+// @Failure      404        {object}  models.ErrorResponse
+// @Router       /admin/topics/{topic}/messages/{messageID} [delete]
 func (h *Handler) DeleteMessage(w http.ResponseWriter, r *http.Request) {
 	topic := chi.URLParam(r, "topic")
 	messageID := chi.URLParam(r, "messageID")
@@ -254,13 +335,20 @@ func (h *Handler) DeleteMessage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"status":     "deleted",
-		"message_id": messageID,
+	json.NewEncoder(w).Encode(models.DeleteResponse{
+		Status:    "deleted",
+		MessageID: messageID,
 	})
 }
 
-// PurgeMessages deletes all messages from a topic.
+// PurgeMessages godoc
+// @Summary      Purge all messages
+// @Description  Deletes all messages from a topic
+// @Tags         Admin
+// @Produce      json
+// @Param        topic  path      string  true  "Topic name"
+// @Success      200    {object}  models.PurgeResponse
+// @Router       /admin/topics/{topic}/messages [delete]
 func (h *Handler) PurgeMessages(w http.ResponseWriter, r *http.Request) {
 	topic := chi.URLParam(r, "topic")
 	if topic == "" {
@@ -271,13 +359,20 @@ func (h *Handler) PurgeMessages(w http.ResponseWriter, r *http.Request) {
 	deleted := h.broker.PurgeMessages(topic)
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"status":           "purged",
-		"messages_deleted": deleted,
+	json.NewEncoder(w).Encode(models.PurgeResponse{
+		Status:          "purged",
+		MessagesDeleted: deleted,
 	})
 }
 
-// GetConsumers returns consumers for a topic.
+// GetConsumers godoc
+// @Summary      Get topic consumers
+// @Description  Returns all consumers for a topic
+// @Tags         Admin
+// @Produce      json
+// @Param        topic  path      string  true  "Topic name"
+// @Success      200    {object}  models.ConsumersResponse
+// @Router       /admin/topics/{topic}/consumers [get]
 func (h *Handler) GetConsumers(w http.ResponseWriter, r *http.Request) {
 	topic := chi.URLParam(r, "topic")
 	if topic == "" {
@@ -288,9 +383,9 @@ func (h *Handler) GetConsumers(w http.ResponseWriter, r *http.Request) {
 	consumers := h.broker.GetConsumers(topic)
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"topic":     topic,
-		"consumers": consumers,
+	json.NewEncoder(w).Encode(models.ConsumersResponse{
+		Topic:     topic,
+		Consumers: consumers,
 	})
 }
 

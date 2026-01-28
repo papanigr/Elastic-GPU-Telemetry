@@ -17,9 +17,10 @@ FROM golang:1.22-alpine AS builder
 # Install git and optionally protoc
 RUN apk add --no-cache git ca-certificates protobuf protobuf-dev
 
-# Install Go protoc plugins (only used if proto files need regeneration)
+# Install Go protoc plugins and swag for OpenAPI generation
 RUN go install google.golang.org/protobuf/cmd/protoc-gen-go@latest && \
-    go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
+    go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest && \
+    go install github.com/swaggo/swag/cmd/swag@latest
 
 WORKDIR /build
 
@@ -41,6 +42,9 @@ RUN if [ ! -f pkg/pb/mq.pb.go ]; then \
     else \
         echo "Using existing proto files from repo"; \
     fi
+
+# Generate Swagger documentation (auto-generated OpenAPI spec)
+RUN swag init -g cmd/main.go -o docs --parseDependency --parseInternal
 
 # Build the binary
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \

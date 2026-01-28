@@ -146,7 +146,13 @@ func (s *Streamer) streamFullFile(ctx context.Context) error {
 }
 
 // streamNRecords reads and publishes N records.
+// Each record gets a unique timestamp with offset based on position in batch.
 func (s *Streamer) streamNRecords(ctx context.Context, n int) error {
+	// Calculate time offset per record to spread timestamps across the batch interval
+	// e.g., 10 records in 5s interval = 500ms between each record's timestamp
+	offsetPerRecord := s.config.StreamInterval / time.Duration(n)
+	batchStartTime := time.Now()
+
 	for i := 0; i < n; i++ {
 		// Check context before each record
 		select {
@@ -160,6 +166,9 @@ func (s *Streamer) streamNRecords(ctx context.Context, n int) error {
 		if err != nil {
 			return fmt.Errorf("failed to read record: %w", err)
 		}
+
+		// Set unique timestamp for this record based on position in batch
+		record.Timestamp = batchStartTime.Add(time.Duration(i) * offsetPerRecord)
 
 		// Publish to message queue
 		if err := s.publisher.Publish(ctx, s.config.Topic, *record); err != nil {

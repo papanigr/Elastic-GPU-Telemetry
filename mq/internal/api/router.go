@@ -5,6 +5,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/gpu-telemetry-pipeline/mq/internal/broker"
 	"github.com/rs/zerolog"
+	httpSwagger "github.com/swaggo/http-swagger/v2"
 )
 
 // NewRouter creates a new HTTP router with all routes configured.
@@ -20,6 +21,11 @@ func NewRouter(b *broker.Broker, logger zerolog.Logger) *chi.Mux {
 
 	// Health endpoint (returns JSON status)
 	r.Get("/health", handler.Health)
+
+	// Swagger UI - auto-generated documentation
+	r.Get("/swagger/*", httpSwagger.Handler(
+		httpSwagger.URL("/swagger/doc.json"),
+	))
 
 	// API v1 routes (HTTP endpoints for message operations)
 	// Streamer uses these HTTP endpoints, gRPC is also available on port 8081

@@ -1,0 +1,510 @@
+basePath: /
+definitions:
+  github_com_gpu-telemetry-pipeline_mq_pkg_models.AckRequest:
+    description: Request to acknowledge messages
+    properties:
+      consumer_id:
+        example: collector-1
+        type: string
+      message_ids:
+        items:
+          type: string
+        type: array
+    type: object
+  github_com_gpu-telemetry-pipeline_mq_pkg_models.AckResponse:
+    description: Response after acknowledging messages
+    properties:
+      acked:
+        example: 5
+        type: integer
+      status:
+        example: ok
+        type: string
+    type: object
+  github_com_gpu-telemetry-pipeline_mq_pkg_models.ConsumeResponse:
+    description: Response with consumed messages
+    properties:
+      messages:
+        items:
+          $ref: '#/definitions/github_com_gpu-telemetry-pipeline_mq_pkg_models.Message'
+        type: array
+    type: object
+  github_com_gpu-telemetry-pipeline_mq_pkg_models.ConsumerInfo:
+    description: Consumer information
+    properties:
+      connected:
+        example: true
+        type: boolean
+      group:
+        example: telemetry-collectors
+        type: string
+      id:
+        example: collector-1
+        type: string
+      last_seen:
+        example: "2026-01-28T15:30:00Z"
+        type: string
+      pending_acks:
+        example: 5
+        type: integer
+    type: object
+  github_com_gpu-telemetry-pipeline_mq_pkg_models.ConsumersResponse:
+    description: Consumers for a topic
+    properties:
+      consumers:
+        items:
+          $ref: '#/definitions/github_com_gpu-telemetry-pipeline_mq_pkg_models.ConsumerInfo'
+        type: array
+      topic:
+        example: gpu-telemetry
+        type: string
+    type: object
+  github_com_gpu-telemetry-pipeline_mq_pkg_models.DeleteResponse:
+    description: Delete response
+    properties:
+      message_id:
+        example: 550e8400-e29b-41d4-a716-446655440000
+        type: string
+      status:
+        example: deleted
+        type: string
+    type: object
+  github_com_gpu-telemetry-pipeline_mq_pkg_models.ErrorResponse:
+    description: Error response
+    properties:
+      code:
+        example: 404
+        type: integer
+      details:
+        type: string
+      error:
+        example: topic not found
+        type: string
+    type: object
+  github_com_gpu-telemetry-pipeline_mq_pkg_models.HealthResponse:
+    description: Health check response
+    properties:
+      status:
+        example: healthy
+        type: string
+      time:
+        example: "2026-01-28T15:30:00Z"
+        type: string
+    type: object
+  github_com_gpu-telemetry-pipeline_mq_pkg_models.Message:
+    description: Message in the queue
+    properties:
+      id:
+        example: 550e8400-e29b-41d4-a716-446655440000
+        type: string
+      payload:
+        items:
+          type: integer
+        type: array
+      timestamp:
+        example: "2026-01-28T15:30:00Z"
+        type: string
+      topic:
+        example: gpu-telemetry
+        type: string
+    type: object
+  github_com_gpu-telemetry-pipeline_mq_pkg_models.MessagesResponse:
+    description: Messages from a topic
+    properties:
+      count:
+        example: 10
+        type: integer
+      messages:
+        items:
+          $ref: '#/definitions/github_com_gpu-telemetry-pipeline_mq_pkg_models.Message'
+        type: array
+      topic:
+        example: gpu-telemetry
+        type: string
+    type: object
+  github_com_gpu-telemetry-pipeline_mq_pkg_models.PublishRequest:
+    description: Request to publish a message
+    properties:
+      id:
+        example: 550e8400-e29b-41d4-a716-446655440000
+        type: string
+      payload:
+        items:
+          type: integer
+        type: array
+      timestamp:
+        type: string
+    type: object
+  github_com_gpu-telemetry-pipeline_mq_pkg_models.PublishResponse:
+    description: Response after publishing a message
+    properties:
+      message_id:
+        example: 550e8400-e29b-41d4-a716-446655440000
+        type: string
+      status:
+        example: ok
+        type: string
+    type: object
+  github_com_gpu-telemetry-pipeline_mq_pkg_models.PurgeResponse:
+    description: Purge response
+    properties:
+      messages_deleted:
+        example: 100
+        type: integer
+      status:
+        example: purged
+        type: string
+    type: object
+  github_com_gpu-telemetry-pipeline_mq_pkg_models.SubscribeRequest:
+    description: Request to subscribe to a topic
+    properties:
+      consumer_id:
+        example: collector-1
+        type: string
+      group:
+        example: telemetry-collectors
+        type: string
+    type: object
+  github_com_gpu-telemetry-pipeline_mq_pkg_models.SubscribeResponse:
+    description: Response after subscribing
+    properties:
+      group:
+        example: telemetry-collectors
+        type: string
+      status:
+        example: subscribed
+        type: string
+      topic:
+        example: gpu-telemetry
+        type: string
+    type: object
+  github_com_gpu-telemetry-pipeline_mq_pkg_models.TopicListResponse:
+    description: List of topics
+    properties:
+      topics:
+        items:
+          type: string
+        type: array
+    type: object
+  github_com_gpu-telemetry-pipeline_mq_pkg_models.TopicStats:
+    description: Topic statistics
+    properties:
+      consumer_groups:
+        example: 1
+        type: integer
+      dropped_messages:
+        description: Graceful degradation metrics
+        example: 0
+        type: integer
+      max_size:
+        example: 10000
+        type: integer
+      oldest_message_age:
+        example: 5m30s
+        type: string
+      pending_messages:
+        example: 100
+        type: integer
+      queue_size:
+        example: 150
+        type: integer
+      queue_utilization:
+        example: 1.5%
+        type: string
+      topic:
+        example: gpu-telemetry
+        type: string
+      total_consumers:
+        example: 3
+        type: integer
+    type: object
+host: localhost:8082
+info:
+  contact:
+    name: GPU Telemetry Pipeline
+  description: Custom Message Queue Broker with topic-based pub/sub, consumer groups,
+    and at-least-once delivery.
+  title: MQ Broker API
+  version: 1.0.0
+paths:
+  /admin/topics:
+    get:
+      description: Returns a list of all topics in the broker
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_gpu-telemetry-pipeline_mq_pkg_models.TopicListResponse'
+      summary: List all topics
+      tags:
+      - Admin
+  /admin/topics/{topic}/consumers:
+    get:
+      description: Returns all consumers for a topic
+      parameters:
+      - description: Topic name
+        in: path
+        name: topic
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_gpu-telemetry-pipeline_mq_pkg_models.ConsumersResponse'
+      summary: Get topic consumers
+      tags:
+      - Admin
+  /admin/topics/{topic}/messages:
+    delete:
+      description: Deletes all messages from a topic
+      parameters:
+      - description: Topic name
+        in: path
+        name: topic
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_gpu-telemetry-pipeline_mq_pkg_models.PurgeResponse'
+      summary: Purge all messages
+      tags:
+      - Admin
+    get:
+      description: Returns messages from a topic for administrative viewing
+      parameters:
+      - description: Topic name
+        in: path
+        name: topic
+        required: true
+        type: string
+      - description: Maximum messages to return (default 100)
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_gpu-telemetry-pipeline_mq_pkg_models.MessagesResponse'
+      summary: Get messages from topic (admin)
+      tags:
+      - Admin
+  /admin/topics/{topic}/messages/{messageID}:
+    delete:
+      description: Deletes a specific message from a topic
+      parameters:
+      - description: Topic name
+        in: path
+        name: topic
+        required: true
+        type: string
+      - description: Message ID
+        in: path
+        name: messageID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_gpu-telemetry-pipeline_mq_pkg_models.DeleteResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_gpu-telemetry-pipeline_mq_pkg_models.ErrorResponse'
+      summary: Delete a message
+      tags:
+      - Admin
+  /admin/topics/{topic}/stats:
+    get:
+      description: Returns statistics for a specific topic
+      parameters:
+      - description: Topic name
+        in: path
+        name: topic
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_gpu-telemetry-pipeline_mq_pkg_models.TopicStats'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_gpu-telemetry-pipeline_mq_pkg_models.ErrorResponse'
+      summary: Get topic statistics
+      tags:
+      - Admin
+  /api/v1/topics/{topic}/ack:
+    post:
+      consumes:
+      - application/json
+      description: Acknowledges receipt of messages by a consumer
+      parameters:
+      - description: Topic name
+        in: path
+        name: topic
+        required: true
+        type: string
+      - description: Acknowledgment details
+        in: body
+        name: ack
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_gpu-telemetry-pipeline_mq_pkg_models.AckRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_gpu-telemetry-pipeline_mq_pkg_models.AckResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/github_com_gpu-telemetry-pipeline_mq_pkg_models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/github_com_gpu-telemetry-pipeline_mq_pkg_models.ErrorResponse'
+      summary: Acknowledge messages
+      tags:
+      - Messages
+  /api/v1/topics/{topic}/messages:
+    get:
+      description: Consumes messages from a topic for a consumer
+      parameters:
+      - description: Topic name
+        in: path
+        name: topic
+        required: true
+        type: string
+      - description: Consumer ID
+        in: query
+        name: consumer_id
+        required: true
+        type: string
+      - description: Consumer group
+        in: query
+        name: group
+        required: true
+        type: string
+      - description: Maximum messages to consume (default 10)
+        in: query
+        name: max_messages
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_gpu-telemetry-pipeline_mq_pkg_models.ConsumeResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/github_com_gpu-telemetry-pipeline_mq_pkg_models.ErrorResponse'
+      summary: Consume messages
+      tags:
+      - Messages
+    post:
+      consumes:
+      - application/json
+      description: Publishes a message to a topic
+      parameters:
+      - description: Topic name
+        in: path
+        name: topic
+        required: true
+        type: string
+      - description: Message to publish
+        in: body
+        name: message
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_gpu-telemetry-pipeline_mq_pkg_models.PublishRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/github_com_gpu-telemetry-pipeline_mq_pkg_models.PublishResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/github_com_gpu-telemetry-pipeline_mq_pkg_models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/github_com_gpu-telemetry-pipeline_mq_pkg_models.ErrorResponse'
+      summary: Publish a message
+      tags:
+      - Messages
+  /api/v1/topics/{topic}/subscribe:
+    post:
+      consumes:
+      - application/json
+      description: Subscribes a consumer to a topic within a consumer group
+      parameters:
+      - description: Topic name
+        in: path
+        name: topic
+        required: true
+        type: string
+      - description: Subscription details
+        in: body
+        name: subscription
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_gpu-telemetry-pipeline_mq_pkg_models.SubscribeRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_gpu-telemetry-pipeline_mq_pkg_models.SubscribeResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/github_com_gpu-telemetry-pipeline_mq_pkg_models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/github_com_gpu-telemetry-pipeline_mq_pkg_models.ErrorResponse'
+      summary: Subscribe to a topic
+      tags:
+      - Consumers
+  /health:
+    get:
+      description: Returns the health status of the MQ broker
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_gpu-telemetry-pipeline_mq_pkg_models.HealthResponse'
+      summary: Health check
+      tags:
+      - Health
+schemes:
+- http
+swagger: "2.0"

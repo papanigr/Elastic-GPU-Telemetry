@@ -1,0 +1,218 @@
+basePath: /
+definitions:
+  github_com_gpu-telemetry-pipeline_gateway_internal_models.ErrorResponse:
+    description: API error response
+    properties:
+      code:
+        example: 404
+        type: integer
+      details:
+        example: GPU-invalid-uuid
+        type: string
+      error:
+        example: GPU not found
+        type: string
+    type: object
+  github_com_gpu-telemetry-pipeline_gateway_internal_models.GPU:
+    description: GPU information
+    properties:
+      device:
+        example: nvidia0
+        type: string
+      gpu_index:
+        example: 0
+        type: integer
+      hostname:
+        example: mtv5-dgx1-hgpu-031
+        type: string
+      last_seen:
+        example: "2026-01-28T15:30:00Z"
+        type: string
+      model_name:
+        example: NVIDIA H100 80GB HBM3
+        type: string
+      uuid:
+        example: GPU-5fd4f087-86f3-7a43-b711-4771313afc50
+        type: string
+    type: object
+  github_com_gpu-telemetry-pipeline_gateway_internal_models.GPUListResponse:
+    description: List of GPUs response
+    properties:
+      count:
+        example: 8
+        type: integer
+      gpus:
+        items:
+          $ref: '#/definitions/github_com_gpu-telemetry-pipeline_gateway_internal_models.GPU'
+        type: array
+    type: object
+  github_com_gpu-telemetry-pipeline_gateway_internal_models.GPUTelemetry:
+    description: GPU telemetry data point
+    properties:
+      container:
+        type: string
+      device:
+        example: nvidia0
+        type: string
+      gpu_index:
+        example: 0
+        type: integer
+      hostname:
+        example: mtv5-dgx1-hgpu-031
+        type: string
+      id:
+        example: abc123-def456
+        type: string
+      labels_raw:
+        type: string
+      message_id:
+        type: string
+      metric_name:
+        example: DCGM_FI_DEV_GPU_UTIL
+        type: string
+      model_name:
+        example: NVIDIA H100 80GB HBM3
+        type: string
+      namespace:
+        type: string
+      pod:
+        type: string
+      received_at:
+        example: "2026-01-28T15:30:01Z"
+        type: string
+      timestamp:
+        example: "2026-01-28T15:30:00Z"
+        type: string
+      uuid:
+        example: GPU-5fd4f087-86f3-7a43-b711-4771313afc50
+        type: string
+      value:
+        example: 75.5
+        type: number
+    type: object
+  github_com_gpu-telemetry-pipeline_gateway_internal_models.HealthResponse:
+    description: Health check response
+    properties:
+      database:
+        example: healthy
+        type: string
+      status:
+        example: healthy
+        type: string
+      version:
+        example: 1.0.0
+        type: string
+    type: object
+  github_com_gpu-telemetry-pipeline_gateway_internal_models.TelemetryListResponse:
+    description: GPU telemetry response with pagination
+    properties:
+      count:
+        example: 100
+        type: integer
+      end_time:
+        type: string
+      gpu_uuid:
+        example: GPU-5fd4f087-86f3-7a43-b711-4771313afc50
+        type: string
+      start_time:
+        type: string
+      telemetry:
+        items:
+          $ref: '#/definitions/github_com_gpu-telemetry-pipeline_gateway_internal_models.GPUTelemetry'
+        type: array
+      total_count:
+        example: 1000
+        type: integer
+    type: object
+host: localhost:8080
+info:
+  contact:
+    name: GPU Telemetry Pipeline
+  description: REST API for querying GPU telemetry data from the GPU Telemetry Pipeline.
+  title: GPU Telemetry API
+  version: 1.0.0
+paths:
+  /api/v1/gpus:
+    get:
+      description: Returns a list of all unique GPUs that have reported telemetry
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_gpu-telemetry-pipeline_gateway_internal_models.GPUListResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/github_com_gpu-telemetry-pipeline_gateway_internal_models.ErrorResponse'
+      summary: List all GPUs
+      tags:
+      - GPUs
+  /api/v1/gpus/{id}/telemetry:
+    get:
+      description: Returns telemetry data for a specific GPU, ordered by timestamp
+        descending
+      parameters:
+      - description: GPU UUID (e.g., GPU-5fd4f087-86f3-7a43-b711-4771313afc50)
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: 'Start time filter (formats: 2026-01-28T00:00:00, 2026-01-28,
+          or Unix timestamp)'
+        in: query
+        name: start_time
+        type: string
+      - description: 'End time filter (formats: 2026-01-28T23:59:59, 2026-01-28, or
+          Unix timestamp)'
+        in: query
+        name: end_time
+        type: string
+      - description: Max records to return (default 100, max 1000)
+        in: query
+        name: limit
+        type: integer
+      - description: Number of records to skip (for pagination)
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_gpu-telemetry-pipeline_gateway_internal_models.TelemetryListResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/github_com_gpu-telemetry-pipeline_gateway_internal_models.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_gpu-telemetry-pipeline_gateway_internal_models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/github_com_gpu-telemetry-pipeline_gateway_internal_models.ErrorResponse'
+      summary: Get GPU telemetry
+      tags:
+      - Telemetry
+  /health:
+    get:
+      description: Returns the health status of the API and its dependencies
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_gpu-telemetry-pipeline_gateway_internal_models.HealthResponse'
+      summary: Health check
+      tags:
+      - Health
+schemes:
+- http
+- https
+swagger: "2.0"

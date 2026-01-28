@@ -5,7 +5,7 @@
 # Run all commands from the mq/ directory.
 #
 
-.PHONY: all build test run docker clean help proto proto-install
+.PHONY: all build test run docker clean help proto proto-install swagger
 
 # Go parameters
 GOCMD=go
@@ -68,8 +68,20 @@ proto-check:
 		$(MAKE) proto; \
 	fi
 
-## build: Build the MQ broker binary
-build: proto-check
+## swagger: Generate Swagger/OpenAPI documentation (auto-generated)
+swagger:
+	@echo "Generating Swagger documentation..."
+	@if command -v swag >/dev/null 2>&1; then \
+		swag init -g cmd/main.go -o docs --parseDependency --parseInternal; \
+	else \
+		echo "swag not installed. Installing..."; \
+		$(GOCMD) install github.com/swaggo/swag/cmd/swag@latest; \
+		swag init -g cmd/main.go -o docs --parseDependency --parseInternal; \
+	fi
+	@echo "Swagger docs generated in docs/"
+
+## build: Build the MQ broker binary (generates swagger first)
+build: proto-check swagger
 	@echo "Building $(SERVICE_NAME)..."
 	@mkdir -p $(BIN_DIR)
 	$(GOBUILD) -ldflags="-w -s" -o $(BIN_NAME) ./cmd
@@ -133,6 +145,7 @@ help:
 	@echo ""
 	@echo "  proto-install   Install protoc Go plugins (run once)"
 	@echo "  proto           Generate Go code from proto files"
+	@echo "  swagger         Generate Swagger/OpenAPI documentation"
 	@echo "  build           Build the broker binary"
 	@echo "  test            Run tests"
 	@echo "  test-cover      Run tests with coverage"
