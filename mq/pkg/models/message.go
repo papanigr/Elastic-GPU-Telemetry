@@ -17,6 +17,14 @@ type Message struct {
 	State       MessageState `json:"-"`
 	DeliverTo   string       `json:"-"` // Consumer ID this message is assigned to
 	DeliveredAt time.Time    `json:"-"`
+	// DLQ tracking fields
+	RetryCount    int       `json:"-"` // Number of delivery attempts
+	DLQRetryCount int       `json:"-"` // Number of DLQ retry attempts
+	LastError     string    `json:"-"` // Last error message
+	FirstFailedAt time.Time `json:"-"` // When it first failed
+	LastFailedAt  time.Time `json:"-"` // When it last failed
+	OriginalTopic string    `json:"-"` // Original topic (for DLQ messages)
+	IsDLQ         bool      `json:"-"` // Whether this message is in DLQ
 }
 
 // MessageState represents the state of a message.
@@ -29,7 +37,25 @@ const (
 	Delivered
 	// Acked - message acknowledged by consumer
 	Acked
+	// Dead - message has exceeded max DLQ retries, requires admin action
+	Dead
 )
+
+// String returns a string representation of the message state.
+func (s MessageState) String() string {
+	switch s {
+	case Pending:
+		return "pending"
+	case Delivered:
+		return "delivered"
+	case Acked:
+		return "acked"
+	case Dead:
+		return "dead"
+	default:
+		return "unknown"
+	}
+}
 
 // PublishRequest is the request body for publishing a message.
 // @Description Request to publish a message
@@ -162,4 +188,53 @@ type PurgeResponse struct {
 type ConsumersResponse struct {
 	Topic     string          `json:"topic" example:"gpu-telemetry"`
 	Consumers []*ConsumerInfo `json:"consumers"`
+}
+
+// DLQMessage represents a message in the Dead Letter Queue with failure info.
+// @Description Dead Letter Queue message with failure details
+type DLQMessage struct {
+	ID            string          `json:"id" example:"550e8400-e29b-41d4-a716-446655440000"`
+	OriginalTopic string          `json:"original_topic" example:"gpu-telemetry"`
+	Payload       json.RawMessage `json:"payload"`
+	Timestamp     time.Time       `json:"timestamp" example:"2026-01-28T15:30:00Z"`
+	RetryCount    int             `json:"retry_count" example:"3"`
+	DLQRetryCount int             `json:"dlq_retry_count" example:"2"`
+	LastError     string          `json:"last_error,omitempty" example:"database connection refused"`
+	FirstFailedAt time.Time       `json:"first_failed_at" example:"2026-01-28T15:30:00Z"`
+	LastFailedAt  time.Time       `json:"last_failed_at" example:"2026-01-28T15:35:00Z"`
+	State         string          `json:"state" example:"pending"`
+}
+
+// DLQStats contains statistics about a Dead Letter Queue.
+// @Description DLQ statistics
+type DLQStats struct {
+	Topic           string `json:"topic" example:"gpu-telemetry-dlq"`
+	OriginalTopic   string `json:"original_topic" example:"gpu-telemetry"`
+	TotalMessages   int    `json:"total_messages" example:"10"`
+	PendingMessages int    `json:"pending_messages" example:"5"`
+	DeadMessages    int    `json:"dead_messages" example:"5"`
+	OldestMessage   string `json:"oldest_message,omitempty" example:"5m30s"`
+}
+
+// DLQMessagesResponse is the response for getting DLQ messages.
+// @Description DLQ messages response
+type DLQMessagesResponse struct {
+	Topic    string        `json:"topic" example:"gpu-telemetry-dlq"`
+	Count    int           `json:"count" example:"10"`
+	Messages []*DLQMessage `json:"messages"`
+}
+
+// ReplayRequest is the request for replaying DLQ messages.
+// @Description Request to replay DLQ messages
+type ReplayRequest struct {
+	MessageIDs []string `json:"message_ids,omitempty"` // If empty, replay all pending DLQ messages
+	Force      bool     `json:"force,omitempty"`       // If true, also replay dead messages
+}
+
+// ReplayResponse is the response for replaying DLQ messages.
+// @Description Response after replaying DLQ messages
+type ReplayResponse struct {
+	Status   string `json:"status" example:"replayed"`
+	Replayed int    `json:"replayed" example:"5"`
+	Failed   int    `json:"failed" example:"0"`
 }

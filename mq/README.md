@@ -8,6 +8,7 @@ The MQ Broker provides:
 - Topic-based pub/sub messaging
 - Consumer groups with round-robin load balancing
 - At-least-once delivery with acknowledgments
+- **Dead Letter Queue (DLQ)** for failed message handling with auto-retry
 - **Dual protocol support:** gRPC (port 8081) + HTTP (port 8082)
 - Admin APIs for queue inspection and management
 - Production-grade protobuf/gRPC implementation
@@ -102,6 +103,11 @@ mq/
 | `MQ_ACK_TIMEOUT` | `30s` | Redeliver if no ACK within this time |
 | `MQ_CLEANUP_INTERVAL` | `10s` | Cleanup routine interval |
 | `MQ_LOG_LEVEL` | `info` | Log level |
+| **Dead Letter Queue (DLQ)** | | |
+| `MQ_DLQ_ENABLED` | `true` | Enable Dead Letter Queue |
+| `MQ_MAX_RETRIES` | `3` | Max delivery attempts before moving to DLQ |
+| `MQ_DLQ_MAX_RETRIES` | `3` | Max DLQ retry attempts before marking as dead |
+| `MQ_DLQ_RETRY_DELAY` | `5m` | Delay between DLQ auto-retry attempts |
 
 ## REST API Reference
 
@@ -134,6 +140,147 @@ All HTTP endpoints are served on port **8082** by default.
 | DELETE | `/admin/topics/{topic}/messages` | Purge all messages in topic | `curl -X DELETE http://localhost:8082/admin/topics/gpu-telemetry/messages` |
 | DELETE | `/admin/topics/{topic}/messages/{id}` | Delete specific message | `curl -X DELETE http://localhost:8082/admin/topics/gpu-telemetry/messages/msg-id-1` |
 | GET | `/admin/topics/{topic}/consumers` | List consumers for topic | `curl http://localhost:8082/admin/topics/gpu-telemetry/consumers` |
+
+### Dead Letter Queue (DLQ) Admin Operations
+
+Messages that fail delivery after `MQ_MAX_RETRIES` (default: 3) attempts are automatically moved to the DLQ.
+
+| Method | Endpoint | Description | Example |
+|--------|----------|-------------|---------|
+| GET | `/admin/topics/{topic}/dlq/stats` | Get DLQ statistics | `curl http://localhost:8082/admin/topics/gpu-telemetry/dlq/stats` |
+| GET | `/admin/topics/{topic}/dlq/messages` | View DLQ messages with failure details | `curl "http://localhost:8082/admin/topics/gpu-telemetry/dlq/messages?limit=10"` |
+| POST | `/admin/topics/{topic}/dlq/replay` | Replay DLQ messages back to original topic | `curl -X POST http://localhost:8082/admin/topics/gpu-telemetry/dlq/replay` |
+| DELETE | `/admin/topics/{topic}/dlq` | Purge all DLQ messages | `curl -X DELETE http://localhost:8082/admin/topics/gpu-telemetry/dlq` |
+
+#### DLQ Message States
+
+| State | Description |
+|-------|-------------|
+| `pending` | Message is waiting to be auto-retried (after `MQ_DLQ_RETRY_DELAY`) |
+| `delivered` | Message was delivered to consumer, awaiting ACK |
+| `dead` | Message exceeded `MQ_DLQ_MAX_RETRIES`, requires admin action |
+
+#### DLQ Admin Workflow
+
+```bash
+# 1. Check if there are DLQ messages
+curl http://localhost:8082/admin/topics/gpu-telemetry/dlq/stats
+
+# 2. View failed messages to understand the issue
+curl "http://localhost:8082/admin/topics/gpu-telemetry/dlq/messages?limit=10"
+
+# 3. Fix the root cause (e.g., restart database, fix parsing bug)
+
+# 4. Replay all pending DLQ messages back to main queue
+curl -X POST http://localhost:8082/admin/topics/gpu-telemetry/dlq/replay
+
+# 5. To replay specific messages only:
+curl -X POST http://localhost:8082/admin/topics/gpu-telemetry/dlq/replay \
+  -H "Content-Type: application/json" \
+  -d '{"message_ids": ["msg-id-1", "msg-id-2"]}'
+
+# 6. To replay dead messages (force):
+curl -X POST http://localhost:8082/admin/topics/gpu-telemetry/dlq/replay \
+  -H "Content-Type: application/json" \
+  -d '{"force": true}'
+
+# 7. Discard all DLQ messages (if data is not needed)
+curl -X DELETE http://localhost:8082/admin/topics/gpu-telemetry/dlq
+```
+
+## Dead Letter Queue (DLQ) Architecture
+
+The MQ Broker implements a hybrid DLQ approach with **automatic replay** for handling failed messages:
+
+```
+                          Main Queue                              DLQ
+                              │                                    │
+     Publish ───────────────► │                                    │
+                              ▼                                    │
+                        ┌──────────┐                               │
+                        │ Pending  │                               │
+                        └────┬─────┘                               │
+                             │ Consume                             │
+                             ▼                                     │
+                        ┌──────────┐                               │
+                        │Delivered │                               │
+                        └────┬─────┘                               │
+                   ┌─────────┴─────────┐                           │
+              ACK  │                   │ No ACK (timeout)          │
+                   ▼                   ▼                           │
+              ┌────────┐         RetryCount++                      │
+              │ Acked  │               │                           │
+              │(remove)│    ┌──────────┴──────────┐                │
+              └────────┘    │                     │                │
+                     < MaxRetries         ≥ MaxRetries             │
+                            │                     │                │
+                            ▼                     ▼                │
+                       ┌──────────┐    ┌────────────────────┐      │
+                       │ Pending  │    │  Move to DLQ       │──────►
+                       │(redeliver)│   └────────────────────┘      │
+                       └──────────┘                                │
+                            ▲                                      ▼
+                            │                                ┌───────────┐
+                            │                                │DLQ Pending│
+                            │                                └─────┬─────┘
+                            │                                      │
+                            │          After DLQRetryDelay         │
+                            │         (auto-replay to main)        │
+                            │◄─────────────────────────────────────┘
+                            │                                      │
+                            │                           DLQRetryCount++
+                            │                                      │
+                            │                      ┌───────────────┴───────────────┐
+                            │                      │                               │
+                            │             < DLQMaxRetries                  ≥ DLQMaxRetries
+                            │                      │                               │
+                            │                      ▼                               ▼
+                            │               ┌─────────────┐                 ┌──────────┐
+                            └───────────────│Auto-Replay  │                 │  Dead    │
+                                            │to Main Queue│                 │(admin)   │
+                                            └─────────────┘                 └──────────┘
+```
+
+### Automatic Recovery Flow (No Admin Action Needed)
+
+When the database goes down and comes back up:
+
+```
+1. Collector fails to save → No ACK sent
+2. MQ redelivers after 30s (MQ_ACK_TIMEOUT)
+3. After 3 failures → Message moves to DLQ
+4. After 5 min → Message auto-replays back to main queue
+5. Collector picks up message → DB is back → Saves successfully → ACK
+6. Message removed ✓
+
+If DB is still down after replay:
+7. Message fails again → Back to DLQ
+8. After 3 auto-replays → Message marked as Dead
+9. Admin manually replays when ready
+```
+
+### Key Features
+
+1. **Automatic retry**: Messages redelivered after `MQ_ACK_TIMEOUT` (30s)
+2. **DLQ after max retries**: Messages move to DLQ after `MQ_MAX_RETRIES` (3) failures
+3. **Auto-replay to main queue**: DLQ messages automatically replayed to original topic after `MQ_DLQ_RETRY_DELAY` (5m)
+4. **Dead state**: After `MQ_DLQ_MAX_RETRIES` (3) auto-replays still failing, messages marked dead
+5. **Admin replay**: Dead messages can be manually replayed with `force: true`
+
+### Timeline Example (Default Settings)
+
+| Time | Event |
+|------|-------|
+| 0:00 | Message published, DB goes down |
+| 0:30 | First retry (no ACK after 30s) |
+| 1:00 | Second retry |
+| 1:30 | Third retry → Move to DLQ |
+| 6:30 | First auto-replay to main queue |
+| 7:00 | Fourth retry |
+| 7:30 | Fifth retry → Back to DLQ |
+| 12:30 | Second auto-replay |
+| 18:30 | Third auto-replay |
+| 19:00+ | If still failing → Marked as Dead |
 
 ## Makefile Targets
 

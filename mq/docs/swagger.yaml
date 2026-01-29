@@ -59,6 +59,77 @@ definitions:
         example: gpu-telemetry
         type: string
     type: object
+  github_com_gpu-telemetry-pipeline_mq_pkg_models.DLQMessage:
+    description: Dead Letter Queue message with failure details
+    properties:
+      dlq_retry_count:
+        example: 2
+        type: integer
+      first_failed_at:
+        example: "2026-01-28T15:30:00Z"
+        type: string
+      id:
+        example: 550e8400-e29b-41d4-a716-446655440000
+        type: string
+      last_error:
+        example: database connection refused
+        type: string
+      last_failed_at:
+        example: "2026-01-28T15:35:00Z"
+        type: string
+      original_topic:
+        example: gpu-telemetry
+        type: string
+      payload:
+        items:
+          type: integer
+        type: array
+      retry_count:
+        example: 3
+        type: integer
+      state:
+        example: pending
+        type: string
+      timestamp:
+        example: "2026-01-28T15:30:00Z"
+        type: string
+    type: object
+  github_com_gpu-telemetry-pipeline_mq_pkg_models.DLQMessagesResponse:
+    description: DLQ messages response
+    properties:
+      count:
+        example: 10
+        type: integer
+      messages:
+        items:
+          $ref: '#/definitions/github_com_gpu-telemetry-pipeline_mq_pkg_models.DLQMessage'
+        type: array
+      topic:
+        example: gpu-telemetry-dlq
+        type: string
+    type: object
+  github_com_gpu-telemetry-pipeline_mq_pkg_models.DLQStats:
+    description: DLQ statistics
+    properties:
+      dead_messages:
+        example: 5
+        type: integer
+      oldest_message:
+        example: 5m30s
+        type: string
+      original_topic:
+        example: gpu-telemetry
+        type: string
+      pending_messages:
+        example: 5
+        type: integer
+      topic:
+        example: gpu-telemetry-dlq
+        type: string
+      total_messages:
+        example: 10
+        type: integer
+    type: object
   github_com_gpu-telemetry-pipeline_mq_pkg_models.DeleteResponse:
     description: Delete response
     properties:
@@ -153,6 +224,31 @@ definitions:
         type: integer
       status:
         example: purged
+        type: string
+    type: object
+  github_com_gpu-telemetry-pipeline_mq_pkg_models.ReplayRequest:
+    description: Request to replay DLQ messages
+    properties:
+      force:
+        description: If true, also replay dead messages
+        type: boolean
+      message_ids:
+        description: If empty, replay all pending DLQ messages
+        items:
+          type: string
+        type: array
+    type: object
+  github_com_gpu-telemetry-pipeline_mq_pkg_models.ReplayResponse:
+    description: Response after replaying DLQ messages
+    properties:
+      failed:
+        example: 0
+        type: integer
+      replayed:
+        example: 5
+        type: integer
+      status:
+        example: replayed
         type: string
     type: object
   github_com_gpu-telemetry-pipeline_mq_pkg_models.SubscribeRequest:
@@ -259,6 +355,103 @@ paths:
       summary: Get topic consumers
       tags:
       - Admin
+  /admin/topics/{topic}/dlq:
+    delete:
+      description: Deletes all messages from the Dead Letter Queue for a topic
+      parameters:
+      - description: Original topic name (without -dlq suffix)
+        in: path
+        name: topic
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_gpu-telemetry-pipeline_mq_pkg_models.PurgeResponse'
+      summary: Purge DLQ messages
+      tags:
+      - Admin
+      - DLQ
+  /admin/topics/{topic}/dlq/messages:
+    get:
+      description: Returns messages in the Dead Letter Queue for a topic with failure
+        details
+      parameters:
+      - description: Original topic name (without -dlq suffix)
+        in: path
+        name: topic
+        required: true
+        type: string
+      - description: Maximum messages to return (default 100)
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_gpu-telemetry-pipeline_mq_pkg_models.DLQMessagesResponse'
+      summary: Get DLQ messages
+      tags:
+      - Admin
+      - DLQ
+  /admin/topics/{topic}/dlq/replay:
+    post:
+      consumes:
+      - application/json
+      description: Replays messages from the Dead Letter Queue back to the original
+        topic
+      parameters:
+      - description: Original topic name (without -dlq suffix)
+        in: path
+        name: topic
+        required: true
+        type: string
+      - description: 'Optional: specific message IDs to replay'
+        in: body
+        name: replay
+        schema:
+          $ref: '#/definitions/github_com_gpu-telemetry-pipeline_mq_pkg_models.ReplayRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_gpu-telemetry-pipeline_mq_pkg_models.ReplayResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/github_com_gpu-telemetry-pipeline_mq_pkg_models.ErrorResponse'
+      summary: Replay DLQ messages
+      tags:
+      - Admin
+      - DLQ
+  /admin/topics/{topic}/dlq/stats:
+    get:
+      description: Returns Dead Letter Queue statistics for a topic
+      parameters:
+      - description: Original topic name (without -dlq suffix)
+        in: path
+        name: topic
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_gpu-telemetry-pipeline_mq_pkg_models.DLQStats'
+      summary: Get DLQ statistics
+      tags:
+      - Admin
+      - DLQ
   /admin/topics/{topic}/messages:
     delete:
       description: Deletes all messages from a topic

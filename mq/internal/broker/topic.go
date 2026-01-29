@@ -278,14 +278,26 @@ func (t *Topic) GetConsumers() []*models.ConsumerInfo {
 	return result
 }
 
+// CleanupResult holds the result of a cleanup operation.
+type CleanupResult struct {
+	Removed          int
+	Redelivered      int
+	MoveToDLQ        []*models.Message // Messages that should be moved to DLQ
+	ReplayToOriginal []*models.Message // DLQ messages that should be replayed to original topic
+	MarkedDead       int               // DLQ messages marked as dead
+}
+
 // Cleanup removes old messages and redelivers stale messages.
-func (t *Topic) Cleanup(maxAge, ackTimeout time.Duration) {
+// Returns messages that should be moved to DLQ or replayed to original topic.
+func (t *Topic) Cleanup(maxAge, ackTimeout time.Duration, maxRetries, dlqMaxRetries int, dlqRetryDelay time.Duration, dlqEnabled bool) CleanupResult {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
 	now := time.Now()
-	removed := 0
-	redelivered := 0
+	result := CleanupResult{
+		MoveToDLQ:        make([]*models.Message, 0),
+		ReplayToOriginal: make([]*models.Message, 0),
+	}
 
 	// Process messages
 	newMessages := make([]*models.Message, 0, len(t.messages))
@@ -294,22 +306,108 @@ func (t *Topic) Cleanup(maxAge, ackTimeout time.Duration) {
 	for _, msg := range t.messages {
 		// Remove old acked messages
 		if msg.State == models.Acked {
-			removed++
+			result.Removed++
 			continue
 		}
 
-		// Remove messages older than maxAge
-		if now.Sub(msg.Timestamp) > maxAge {
-			removed++
+		// Remove messages older than maxAge (but not DLQ messages)
+		if !msg.IsDLQ && now.Sub(msg.Timestamp) > maxAge {
+			result.Removed++
 			continue
 		}
 
-		// Redeliver messages that weren't acked in time
+		// Handle DLQ messages
+		if msg.IsDLQ {
+			// Skip dead messages (they stay until admin action)
+			if msg.State == models.Dead {
+				newIndex[msg.ID] = len(newMessages)
+				newMessages = append(newMessages, msg)
+				continue
+			}
+
+			// Auto-replay DLQ messages back to original topic after delay
+			if msg.State == models.Pending && now.Sub(msg.LastFailedAt) > dlqRetryDelay {
+				// Check if we've exceeded DLQ max retries
+				if msg.DLQRetryCount >= dlqMaxRetries {
+					// Mark as dead - requires admin action
+					msg.State = models.Dead
+					msg.LastFailedAt = now
+					result.MarkedDead++
+					t.logger.Warn().
+						Str("message_id", msg.ID).
+						Int("dlq_retry_count", msg.DLQRetryCount).
+						Msg("DLQ message marked as dead after max auto-replays, requires admin action")
+					newIndex[msg.ID] = len(newMessages)
+					newMessages = append(newMessages, msg)
+				} else {
+					// Auto-replay to original topic
+					msg.DLQRetryCount++
+					result.ReplayToOriginal = append(result.ReplayToOriginal, msg)
+					t.logger.Info().
+						Str("message_id", msg.ID).
+						Str("original_topic", msg.OriginalTopic).
+						Int("dlq_retry_count", msg.DLQRetryCount).
+						Msg("Auto-replaying DLQ message to original topic")
+					// Don't add to newMessages - it will be removed from DLQ
+				}
+				continue
+			}
+
+			newIndex[msg.ID] = len(newMessages)
+			newMessages = append(newMessages, msg)
+			continue
+		}
+
+		// Handle regular messages - Redeliver if not acked in time
 		if msg.State == models.Delivered && now.Sub(msg.DeliveredAt) > ackTimeout {
+			msg.RetryCount++
+			
+			// Track first failure
+			if msg.FirstFailedAt.IsZero() {
+				msg.FirstFailedAt = now
+			}
+			msg.LastFailedAt = now
+
+			// Check if should move to DLQ
+			if dlqEnabled && msg.RetryCount >= maxRetries {
+				// Check if this is a replayed message that has exceeded DLQ retries
+				if msg.DLQRetryCount >= dlqMaxRetries {
+					// Mark as dead immediately - it's been replayed max times and still failing
+					msg.IsDLQ = true
+					msg.State = models.Dead
+					msg.OriginalTopic = t.name
+					result.MoveToDLQ = append(result.MoveToDLQ, msg)
+					result.MarkedDead++
+					
+					t.logger.Warn().
+						Str("message_id", msg.ID).
+						Int("retry_count", msg.RetryCount).
+						Int("dlq_retry_count", msg.DLQRetryCount).
+						Msg("Message exceeded max retries after DLQ replays, marked as dead")
+					continue
+				}
+
+				// Prepare for DLQ
+				msg.OriginalTopic = t.name
+				msg.IsDLQ = true
+				msg.State = models.Pending
+				msg.DeliverTo = ""
+				msg.DeliveredAt = time.Time{}
+				result.MoveToDLQ = append(result.MoveToDLQ, msg)
+				
+				t.logger.Warn().
+					Str("message_id", msg.ID).
+					Int("retry_count", msg.RetryCount).
+					Int("dlq_retry_count", msg.DLQRetryCount).
+					Msg("Message exceeded max retries, moving to DLQ")
+				continue // Don't add to this topic's messages
+			}
+
+			// Redeliver
 			msg.State = models.Pending
 			msg.DeliverTo = ""
 			msg.DeliveredAt = time.Time{}
-			redelivered++
+			result.Redelivered++
 		}
 
 		newIndex[msg.ID] = len(newMessages)
@@ -319,10 +417,135 @@ func (t *Topic) Cleanup(maxAge, ackTimeout time.Duration) {
 	t.messages = newMessages
 	t.messageIndex = newIndex
 
-	if removed > 0 || redelivered > 0 {
+	if result.Removed > 0 || result.Redelivered > 0 || len(result.MoveToDLQ) > 0 || len(result.ReplayToOriginal) > 0 {
 		t.logger.Debug().
-			Int("removed", removed).
-			Int("redelivered", redelivered).
+			Int("removed", result.Removed).
+			Int("redelivered", result.Redelivered).
+			Int("moved_to_dlq", len(result.MoveToDLQ)).
+			Int("replay_to_original", len(result.ReplayToOriginal)).
+			Int("marked_dead", result.MarkedDead).
 			Msg("Cleanup completed")
 	}
+
+	return result
+}
+
+// GetDLQStats returns DLQ-specific statistics.
+func (t *Topic) GetDLQStats(originalTopic string) *models.DLQStats {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+
+	pending := 0
+	dead := 0
+	var oldestTime time.Time
+
+	for _, msg := range t.messages {
+		if msg.State == models.Pending {
+			pending++
+		} else if msg.State == models.Dead {
+			dead++
+		}
+		if oldestTime.IsZero() || msg.Timestamp.Before(oldestTime) {
+			oldestTime = msg.Timestamp
+		}
+	}
+
+	var oldestAge string
+	if !oldestTime.IsZero() {
+		oldestAge = time.Since(oldestTime).Round(time.Second).String()
+	}
+
+	return &models.DLQStats{
+		Topic:           t.name,
+		OriginalTopic:   originalTopic,
+		TotalMessages:   len(t.messages),
+		PendingMessages: pending,
+		DeadMessages:    dead,
+		OldestMessage:   oldestAge,
+	}
+}
+
+// GetDLQMessages returns DLQ messages with failure details.
+func (t *Topic) GetDLQMessages(limit int) []*models.DLQMessage {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+
+	if limit <= 0 || limit > len(t.messages) {
+		limit = len(t.messages)
+	}
+
+	result := make([]*models.DLQMessage, 0, limit)
+	for i := 0; i < limit && i < len(t.messages); i++ {
+		msg := t.messages[i]
+		result = append(result, &models.DLQMessage{
+			ID:            msg.ID,
+			OriginalTopic: msg.OriginalTopic,
+			Payload:       msg.Payload,
+			Timestamp:     msg.Timestamp,
+			RetryCount:    msg.RetryCount,
+			DLQRetryCount: msg.DLQRetryCount,
+			LastError:     msg.LastError,
+			FirstFailedAt: msg.FirstFailedAt,
+			LastFailedAt:  msg.LastFailedAt,
+			State:         msg.State.String(),
+		})
+	}
+	return result
+}
+
+// GetMessagesForReplay returns messages that can be replayed.
+// If messageIDs is nil, returns all pending messages.
+// If force is true, also includes dead messages.
+func (t *Topic) GetMessagesForReplay(messageIDs []string, force bool) []*models.Message {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	var result []*models.Message
+	idSet := make(map[string]bool)
+	for _, id := range messageIDs {
+		idSet[id] = true
+	}
+
+	for _, msg := range t.messages {
+		// Filter by message IDs if provided
+		if len(messageIDs) > 0 && !idSet[msg.ID] {
+			continue
+		}
+
+		// Only replay pending or (if force) dead messages
+		if msg.State == models.Pending || (force && msg.State == models.Dead) {
+			result = append(result, msg)
+		}
+	}
+
+	return result
+}
+
+// RemoveMessages removes specified messages from the topic.
+func (t *Topic) RemoveMessages(messageIDs []string) int {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	removed := 0
+	idSet := make(map[string]bool)
+	for _, id := range messageIDs {
+		idSet[id] = true
+	}
+
+	newMessages := make([]*models.Message, 0, len(t.messages))
+	newIndex := make(map[string]int)
+
+	for _, msg := range t.messages {
+		if idSet[msg.ID] {
+			removed++
+			continue
+		}
+		newIndex[msg.ID] = len(newMessages)
+		newMessages = append(newMessages, msg)
+	}
+
+	t.messages = newMessages
+	t.messageIndex = newIndex
+
+	return removed
 }

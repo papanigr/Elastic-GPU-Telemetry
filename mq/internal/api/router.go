@@ -66,6 +66,21 @@ func NewRouter(b *broker.Broker, logger zerolog.Logger) *chi.Mux {
 
 			// List consumers
 			r.Get("/consumers", handler.GetConsumers)
+
+			// Dead Letter Queue (DLQ) operations
+			r.Route("/dlq", func(r chi.Router) {
+				// Get DLQ stats
+				r.Get("/stats", handler.GetDLQStats)
+
+				// Get DLQ messages
+				r.Get("/messages", handler.GetDLQMessages)
+
+				// Replay DLQ messages back to original topic
+				r.Post("/replay", handler.ReplayDLQ)
+
+				// Purge all DLQ messages
+				r.Delete("/", handler.PurgeDLQ)
+			})
 		})
 	})
 

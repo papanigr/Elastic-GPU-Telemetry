@@ -389,6 +389,119 @@ func (h *Handler) GetConsumers(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// --- Dead Letter Queue (DLQ) Endpoints ---
+
+// GetDLQStats godoc
+// @Summary      Get DLQ statistics
+// @Description  Returns Dead Letter Queue statistics for a topic
+// @Tags         Admin,DLQ
+// @Produce      json
+// @Param        topic  path      string  true  "Original topic name (without -dlq suffix)"
+// @Success      200    {object}  models.DLQStats
+// @Router       /admin/topics/{topic}/dlq/stats [get]
+func (h *Handler) GetDLQStats(w http.ResponseWriter, r *http.Request) {
+	topic := chi.URLParam(r, "topic")
+	if topic == "" {
+		h.errorResponse(w, http.StatusBadRequest, "topic is required")
+		return
+	}
+
+	stats := h.broker.GetDLQStats(topic)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(stats)
+}
+
+// GetDLQMessages godoc
+// @Summary      Get DLQ messages
+// @Description  Returns messages in the Dead Letter Queue for a topic with failure details
+// @Tags         Admin,DLQ
+// @Produce      json
+// @Param        topic  path      string  true   "Original topic name (without -dlq suffix)"
+// @Param        limit  query     int     false  "Maximum messages to return (default 100)"
+// @Success      200    {object}  models.DLQMessagesResponse
+// @Router       /admin/topics/{topic}/dlq/messages [get]
+func (h *Handler) GetDLQMessages(w http.ResponseWriter, r *http.Request) {
+	topic := chi.URLParam(r, "topic")
+	if topic == "" {
+		h.errorResponse(w, http.StatusBadRequest, "topic is required")
+		return
+	}
+
+	limitStr := r.URL.Query().Get("limit")
+	limit := 100
+	if limitStr != "" {
+		if n, err := strconv.Atoi(limitStr); err == nil && n > 0 {
+			limit = n
+		}
+	}
+
+	messages := h.broker.GetDLQMessages(topic, limit)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(models.DLQMessagesResponse{
+		Topic:    topic + "-dlq",
+		Count:    len(messages),
+		Messages: messages,
+	})
+}
+
+// ReplayDLQ godoc
+// @Summary      Replay DLQ messages
+// @Description  Replays messages from the Dead Letter Queue back to the original topic
+// @Tags         Admin,DLQ
+// @Accept       json
+// @Produce      json
+// @Param        topic   path      string              true  "Original topic name (without -dlq suffix)"
+// @Param        replay  body      models.ReplayRequest false "Optional: specific message IDs to replay"
+// @Success      200     {object}  models.ReplayResponse
+// @Failure      400     {object}  models.ErrorResponse
+// @Router       /admin/topics/{topic}/dlq/replay [post]
+func (h *Handler) ReplayDLQ(w http.ResponseWriter, r *http.Request) {
+	topic := chi.URLParam(r, "topic")
+	if topic == "" {
+		h.errorResponse(w, http.StatusBadRequest, "topic is required")
+		return
+	}
+
+	var req models.ReplayRequest
+	// Body is optional - if not provided, replay all pending messages
+	json.NewDecoder(r.Body).Decode(&req)
+
+	replayed, failed := h.broker.ReplayDLQMessages(topic, req.MessageIDs, req.Force)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(models.ReplayResponse{
+		Status:   "replayed",
+		Replayed: replayed,
+		Failed:   failed,
+	})
+}
+
+// PurgeDLQ godoc
+// @Summary      Purge DLQ messages
+// @Description  Deletes all messages from the Dead Letter Queue for a topic
+// @Tags         Admin,DLQ
+// @Produce      json
+// @Param        topic  path      string  true  "Original topic name (without -dlq suffix)"
+// @Success      200    {object}  models.PurgeResponse
+// @Router       /admin/topics/{topic}/dlq [delete]
+func (h *Handler) PurgeDLQ(w http.ResponseWriter, r *http.Request) {
+	topic := chi.URLParam(r, "topic")
+	if topic == "" {
+		h.errorResponse(w, http.StatusBadRequest, "topic is required")
+		return
+	}
+
+	deleted := h.broker.PurgeDLQ(topic)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(models.PurgeResponse{
+		Status:          "purged",
+		MessagesDeleted: deleted,
+	})
+}
+
 // errorResponse sends an error response.
 func (h *Handler) errorResponse(w http.ResponseWriter, code int, message string) {
 	w.Header().Set("Content-Type", "application/json")

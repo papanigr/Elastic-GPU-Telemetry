@@ -29,6 +29,20 @@ type Config struct {
 
 	// LogLevel is the logging level.
 	LogLevel string `mapstructure:"log_level"`
+
+	// DLQ Configuration
+
+	// MaxRetries is the maximum number of delivery attempts before moving to DLQ.
+	MaxRetries int `mapstructure:"max_retries"`
+
+	// DLQMaxRetries is the maximum number of DLQ retry attempts before marking as Dead.
+	DLQMaxRetries int `mapstructure:"dlq_max_retries"`
+
+	// DLQRetryDelay is the delay between DLQ auto-retry attempts.
+	DLQRetryDelay time.Duration `mapstructure:"dlq_retry_delay"`
+
+	// DLQEnabled enables the Dead Letter Queue functionality.
+	DLQEnabled bool `mapstructure:"dlq_enabled"`
 }
 
 // DefaultConfig returns the default configuration.
@@ -41,6 +55,11 @@ func DefaultConfig() Config {
 		AckTimeout:      30 * time.Second,
 		CleanupInterval: 10 * time.Second,
 		LogLevel:        "info",
+		// DLQ defaults
+		MaxRetries:    3,
+		DLQMaxRetries: 3,
+		DLQRetryDelay: 5 * time.Minute,
+		DLQEnabled:    true,
 	}
 }
 
@@ -58,6 +77,11 @@ func LoadConfig() (Config, error) {
 	v.SetDefault("ack_timeout", config.AckTimeout)
 	v.SetDefault("cleanup_interval", config.CleanupInterval)
 	v.SetDefault("log_level", config.LogLevel)
+	// DLQ defaults
+	v.SetDefault("max_retries", config.MaxRetries)
+	v.SetDefault("dlq_max_retries", config.DLQMaxRetries)
+	v.SetDefault("dlq_retry_delay", config.DLQRetryDelay)
+	v.SetDefault("dlq_enabled", config.DLQEnabled)
 
 	// Environment variable bindings
 	v.SetEnvPrefix("MQ")
@@ -70,6 +94,11 @@ func LoadConfig() (Config, error) {
 	v.BindEnv("ack_timeout", "MQ_ACK_TIMEOUT")
 	v.BindEnv("cleanup_interval", "MQ_CLEANUP_INTERVAL")
 	v.BindEnv("log_level", "MQ_LOG_LEVEL")
+	// DLQ env bindings
+	v.BindEnv("max_retries", "MQ_MAX_RETRIES")
+	v.BindEnv("dlq_max_retries", "MQ_DLQ_MAX_RETRIES")
+	v.BindEnv("dlq_retry_delay", "MQ_DLQ_RETRY_DELAY")
+	v.BindEnv("dlq_enabled", "MQ_DLQ_ENABLED")
 
 	// Try to read config file
 	v.SetConfigName("config")

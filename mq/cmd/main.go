@@ -49,6 +49,10 @@ func main() {
 		Int("max_queue_size", cfg.MaxQueueSize).
 		Dur("max_message_age", cfg.MaxMessageAge).
 		Dur("ack_timeout", cfg.AckTimeout).
+		Bool("dlq_enabled", cfg.DLQEnabled).
+		Int("max_retries", cfg.MaxRetries).
+		Int("dlq_max_retries", cfg.DLQMaxRetries).
+		Dur("dlq_retry_delay", cfg.DLQRetryDelay).
 		Msg("Starting MQ Broker")
 
 	// Create broker

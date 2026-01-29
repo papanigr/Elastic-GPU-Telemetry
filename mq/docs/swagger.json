@@ -63,6 +63,149 @@
                 }
             }
         },
+        "/admin/topics/{topic}/dlq": {
+            "delete": {
+                "description": "Deletes all messages from the Dead Letter Queue for a topic",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin",
+                    "DLQ"
+                ],
+                "summary": "Purge DLQ messages",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Original topic name (without -dlq suffix)",
+                        "name": "topic",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_gpu-telemetry-pipeline_mq_pkg_models.PurgeResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/topics/{topic}/dlq/messages": {
+            "get": {
+                "description": "Returns messages in the Dead Letter Queue for a topic with failure details",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin",
+                    "DLQ"
+                ],
+                "summary": "Get DLQ messages",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Original topic name (without -dlq suffix)",
+                        "name": "topic",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Maximum messages to return (default 100)",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_gpu-telemetry-pipeline_mq_pkg_models.DLQMessagesResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/topics/{topic}/dlq/replay": {
+            "post": {
+                "description": "Replays messages from the Dead Letter Queue back to the original topic",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin",
+                    "DLQ"
+                ],
+                "summary": "Replay DLQ messages",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Original topic name (without -dlq suffix)",
+                        "name": "topic",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Optional: specific message IDs to replay",
+                        "name": "replay",
+                        "in": "body",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_gpu-telemetry-pipeline_mq_pkg_models.ReplayRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_gpu-telemetry-pipeline_mq_pkg_models.ReplayResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_gpu-telemetry-pipeline_mq_pkg_models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/topics/{topic}/dlq/stats": {
+            "get": {
+                "description": "Returns Dead Letter Queue statistics for a topic",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin",
+                    "DLQ"
+                ],
+                "summary": "Get DLQ statistics",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Original topic name (without -dlq suffix)",
+                        "name": "topic",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_gpu-telemetry-pipeline_mq_pkg_models.DLQStats"
+                        }
+                    }
+                }
+            }
+        },
         "/admin/topics/{topic}/messages": {
             "get": {
                 "description": "Returns messages from a topic for administrative viewing",
@@ -520,6 +663,104 @@
                 }
             }
         },
+        "github_com_gpu-telemetry-pipeline_mq_pkg_models.DLQMessage": {
+            "description": "Dead Letter Queue message with failure details",
+            "type": "object",
+            "properties": {
+                "dlq_retry_count": {
+                    "type": "integer",
+                    "example": 2
+                },
+                "first_failed_at": {
+                    "type": "string",
+                    "example": "2026-01-28T15:30:00Z"
+                },
+                "id": {
+                    "type": "string",
+                    "example": "550e8400-e29b-41d4-a716-446655440000"
+                },
+                "last_error": {
+                    "type": "string",
+                    "example": "database connection refused"
+                },
+                "last_failed_at": {
+                    "type": "string",
+                    "example": "2026-01-28T15:35:00Z"
+                },
+                "original_topic": {
+                    "type": "string",
+                    "example": "gpu-telemetry"
+                },
+                "payload": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "retry_count": {
+                    "type": "integer",
+                    "example": 3
+                },
+                "state": {
+                    "type": "string",
+                    "example": "pending"
+                },
+                "timestamp": {
+                    "type": "string",
+                    "example": "2026-01-28T15:30:00Z"
+                }
+            }
+        },
+        "github_com_gpu-telemetry-pipeline_mq_pkg_models.DLQMessagesResponse": {
+            "description": "DLQ messages response",
+            "type": "object",
+            "properties": {
+                "count": {
+                    "type": "integer",
+                    "example": 10
+                },
+                "messages": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_gpu-telemetry-pipeline_mq_pkg_models.DLQMessage"
+                    }
+                },
+                "topic": {
+                    "type": "string",
+                    "example": "gpu-telemetry-dlq"
+                }
+            }
+        },
+        "github_com_gpu-telemetry-pipeline_mq_pkg_models.DLQStats": {
+            "description": "DLQ statistics",
+            "type": "object",
+            "properties": {
+                "dead_messages": {
+                    "type": "integer",
+                    "example": 5
+                },
+                "oldest_message": {
+                    "type": "string",
+                    "example": "5m30s"
+                },
+                "original_topic": {
+                    "type": "string",
+                    "example": "gpu-telemetry"
+                },
+                "pending_messages": {
+                    "type": "integer",
+                    "example": 5
+                },
+                "topic": {
+                    "type": "string",
+                    "example": "gpu-telemetry-dlq"
+                },
+                "total_messages": {
+                    "type": "integer",
+                    "example": 10
+                }
+            }
+        },
         "github_com_gpu-telemetry-pipeline_mq_pkg_models.DeleteResponse": {
             "description": "Delete response",
             "type": "object",
@@ -653,6 +894,41 @@
                 "status": {
                     "type": "string",
                     "example": "purged"
+                }
+            }
+        },
+        "github_com_gpu-telemetry-pipeline_mq_pkg_models.ReplayRequest": {
+            "description": "Request to replay DLQ messages",
+            "type": "object",
+            "properties": {
+                "force": {
+                    "description": "If true, also replay dead messages",
+                    "type": "boolean"
+                },
+                "message_ids": {
+                    "description": "If empty, replay all pending DLQ messages",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "github_com_gpu-telemetry-pipeline_mq_pkg_models.ReplayResponse": {
+            "description": "Response after replaying DLQ messages",
+            "type": "object",
+            "properties": {
+                "failed": {
+                    "type": "integer",
+                    "example": 0
+                },
+                "replayed": {
+                    "type": "integer",
+                    "example": 5
+                },
+                "status": {
+                    "type": "string",
+                    "example": "replayed"
                 }
             }
         },
