@@ -502,6 +502,53 @@ helm install telemetry oci://registry-1.docker.io/pp010/gpu-telemetry \
 
 ## Summary Statistics
 
+### Development Period
+- **Dates**: January 28-29, 2026 (2 days)
+- **AI Model**: Claude Opus 4.5 High-Thinking (`claude-4.5-opus-high-thinking`)
+- **IDE**: Cursor (Agent Mode)
+
+### AI Usage Metrics (from Cursor Analytics)
+
+| Metric | Jan 28 | Jan 29 | Total |
+|--------|--------|--------|-------|
+| **Agent Requests** | 214 | 136 | **350** |
+| **Lines Suggested** | 20,609 | 6,309 | **26,918** |
+| **Lines Accepted** | 20,608 | 6,309 | **26,917** |
+| **Acceptance Rate** | 99.99% | 100% | **99.99%** |
+
+### Code Contribution by File Type
+
+| File Extension | Accepts | Lines Accepted |
+|----------------|---------|----------------|
+| Go (`.go`) | 166 | 14,319 |
+| Markdown (`.md`) | 96 | 6,515 |
+| YAML (`.yaml`, `.yml`) | 23 | 892 |
+| Go Mod (`.mod`) | 16 | 244 |
+| Templates (`.tpl`) | 1 | 77 |
+| JSON (`.json`) | 1 | 7 |
+| CSV (`.csv`) | 1 | 17 |
+| **Total** | **304** | **22,071** |
+
+### Git Commit Statistics
+
+| Metric | Jan 28 | Jan 29 | Total |
+|--------|--------|--------|-------|
+| **Total Lines Added** | 28,810 | 17,573 | **46,383** |
+| **Total Lines Deleted** | 267 | 577 | **844** |
+| **AI-Generated Lines Added** | 13,150 | 11,685 | **24,835** |
+| **AI-Generated Lines Deleted** | 243 | 565 | **808** |
+| **AI Contribution** | 45.6% | 66.5% | **53.5%** |
+
+### Model Usage
+
+| Model | Requests | Percentage |
+|-------|----------|------------|
+| `claude-4.5-opus-high-thinking` | 345 | 98.6% |
+| `claude-4.5-sonnet-thinking` | 5 | 1.4% |
+| **Total** | **350** | 100% |
+
+### Effort Breakdown
+
 | Aspect | AI-Assisted | Manual Intervention |
 |--------|-------------|---------------------|
 | **Project Structure** | 100% | 0% |
@@ -517,11 +564,15 @@ helm install telemetry oci://registry-1.docker.io/pp010/gpu-telemetry \
 
 - **~90% of development was AI-assisted**
 - **~10% required manual intervention/correction**
-- Most manual work was for:
-  - Platform-specific issues (Podman, macOS networking)
-  - Subtle bugs in complex logic (DLQ cleanup)
-  - Tool version compatibility
-  - Documentation accuracy (default values, optional vs required, project structure)
+- **350 AI requests** over 2 days of development
+- **26,917 lines of code** suggested and accepted
+- **99.99% acceptance rate** on AI suggestions
+
+Most manual work was for:
+- Platform-specific issues (Podman, macOS networking)
+- Subtle bugs in complex logic (DLQ cleanup)
+- Tool version compatibility
+- Documentation accuracy (default values, optional vs required, project structure)
 
 ### Key Learnings
 
@@ -531,5 +582,6 @@ helm install telemetry oci://registry-1.docker.io/pp010/gpu-telemetry \
 
 ---
 
-*Document Version: 1.0*  
-*Last Updated: January 2026*
+*Document Version: 2.0*  
+*Last Updated: January 29, 2026*  
+*Data Source: Cursor Analytics Export*

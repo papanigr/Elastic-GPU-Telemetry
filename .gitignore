@@ -53,3 +53,7 @@ charts/*.tgz
 # Build artifacts
 dist/
 build/
+
+# Cursor Analytics (personal usage data)
+Analytics_Team_*.csv
+team-usage-events-*.csv
