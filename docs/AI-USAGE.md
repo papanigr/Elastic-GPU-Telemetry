@@ -547,6 +547,31 @@ helm install telemetry oci://registry-1.docker.io/pp010/gpu-telemetry \
 | `claude-4.5-sonnet-thinking` | 5 | 1.4% |
 | **Total** | **350** | 100% |
 
+### Token Usage & Cost
+
+#### By Billing Type
+
+| Category | Requests | Input Tokens | Cache Read | Output Tokens | Total Tokens |
+|----------|----------|--------------|------------|---------------|--------------|
+| Included (Subscription) | 77 | 1.16M | 13.78M | 149K | 15.09M |
+| On-Demand (Usage-Based) | 297 | 8.09M | 142.64M | 1.56M | 152.29M |
+| **Total** | **374** | **9.25M** | **156.42M** | **1.71M** | **167.38M** |
+
+#### Estimated Cost (On-Demand Only)
+
+| Token Type | Count | Rate (per 1M) | Cost |
+|------------|-------|---------------|------|
+| Input tokens | 8.09M | $15.00 | $121.36 |
+| Cache read | 142.64M | $1.50 | $213.96 |
+| Output tokens | 1.56M | $75.00 | $117.18 |
+| **Total** | **152.29M** | | **$452.49** |
+
+**Notes:**
+- 77 requests covered by Cursor subscription (no extra charge)
+- 297 requests billed as on-demand usage
+- Cache read tokens have 90% discount vs input pricing
+- Estimate based on Claude Opus 4.5 standard API pricing
+
 ### Effort Breakdown
 
 | Aspect | AI-Assisted | Manual Intervention |
