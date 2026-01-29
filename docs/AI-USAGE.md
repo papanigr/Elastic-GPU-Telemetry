@@ -569,7 +569,7 @@ helm install telemetry oci://registry-1.docker.io/pp010/gpu-telemetry \
 **Notes:**
 - 77 requests covered by Cursor subscription (no extra charge)
 - 297 requests billed as on-demand usage
-- Cache read tokens have 90% discount vs input pricing
+- Cache read optimization saved ~$1,926 (142.64M tokens at $1.50/1M instead of $15/1M = 90% discount)
 - Estimate based on Claude Opus 4.5 standard API pricing
 
 ### Effort Breakdown
