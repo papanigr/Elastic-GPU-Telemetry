@@ -167,23 +167,24 @@ MQ Admin API is auto port-forwarded by `make up` at `http://localhost:8082`.
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/health` | MQ health check |
-| GET | `/api/v1/topics` | List all topics |
-| GET | `/api/v1/topics/{topic}/stats` | Topic statistics |
-| GET | `/api/v1/dlq/{topic}` | List DLQ messages |
-| POST | `/api/v1/dlq/{topic}/replay` | Replay DLQ messages |
+| GET | `/admin/topics` | List all topics |
+| GET | `/admin/topics/{topic}/stats` | Topic statistics |
+| GET | `/admin/topics/{topic}/dlq/stats` | DLQ statistics |
+| GET | `/admin/topics/{topic}/dlq/messages` | List DLQ messages |
+| POST | `/admin/topics/{topic}/dlq/replay` | Replay DLQ messages |
 | GET | `/swagger/index.html` | MQ Swagger UI |
 
 ```bash
 # List topics
-curl http://localhost:8082/api/v1/topics
-# Response: ["gpu-telemetry"]
+curl http://localhost:8082/admin/topics
+# Response: {"topics":["gpu-telemetry"]}
 
 # Get topic stats
-curl http://localhost:8082/api/v1/topics/gpu-telemetry/stats
+curl http://localhost:8082/admin/topics/gpu-telemetry/stats
 
-# Check DLQ (empty when healthy)
-curl http://localhost:8082/api/v1/dlq/gpu-telemetry
-# Response: []
+# Check DLQ stats (empty when healthy)
+curl http://localhost:8082/admin/topics/gpu-telemetry/dlq/stats
+# Response: {"topic":"gpu-telemetry-dlq","original_topic":"gpu-telemetry","total_messages":0,...}
 ```
 
 ### Step 5: Test Scaling

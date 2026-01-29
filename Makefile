@@ -24,7 +24,7 @@ ENGINE := $(notdir $(CONTAINER_ENGINE))
 # ============================================================================
 
 .PHONY: up
-up: check-deps cluster-create docker-build kind-load deploy install-kyverno wait status ## Full setup: cluster + build + deploy + Kyverno + port-forward
+up: check-deps cluster-create docker-build kind-load install-kyverno deploy wait status ## Full setup: cluster + build + deploy + Kyverno + port-forward
 	@echo ""
 	@echo "Starting port-forwards..."
 	@kubectl port-forward svc/gateway 8080:8080 -n $(NAMESPACE) >/dev/null 2>&1 &
