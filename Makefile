@@ -24,23 +24,27 @@ ENGINE := $(notdir $(CONTAINER_ENGINE))
 # ============================================================================
 
 .PHONY: up
-up: check-deps cluster-create docker-build kind-load deploy install-kyverno enable-policies wait status ## Full setup: cluster + build + deploy + policies + port-forward
+up: check-deps cluster-create docker-build kind-load deploy install-kyverno wait status ## Full setup: cluster + build + deploy + Kyverno + port-forward
 	@echo ""
-	@echo "Starting port-forward to Gateway..."
+	@echo "Starting port-forwards..."
 	@kubectl port-forward svc/gateway 8080:8080 -n $(NAMESPACE) >/dev/null 2>&1 &
+	@kubectl port-forward svc/mq 8082:8082 -n $(NAMESPACE) >/dev/null 2>&1 &
 	@sleep 2
 	@echo ""
 	@echo "============================================"
-	@echo "  Setup complete! API ready at localhost:8080"
+	@echo "  Setup complete! APIs ready"
 	@echo "============================================"
 	@echo ""
-	@echo "Gateway API:  http://localhost:8080"
-	@echo "Swagger UI:   http://localhost:8080/swagger/index.html"
-	@echo "Health Check: curl http://localhost:8080/health"
+	@echo "Gateway API:      http://localhost:8080"
+	@echo "Gateway Swagger:  http://localhost:8080/swagger/index.html"
+	@echo ""
+	@echo "MQ Admin API:     http://localhost:8082"
+	@echo "MQ Swagger:       http://localhost:8082/swagger/index.html"
 	@echo ""
 	@echo "Sample commands:"
+	@echo "  curl http://localhost:8080/health"
 	@echo "  curl http://localhost:8080/api/v1/gpus"
-	@echo "  curl http://localhost:8080/api/v1/gpus/{uuid}/telemetry"
+	@echo "  curl http://localhost:8082/api/v1/topics"
 	@echo ""
 	@echo "Scaling limits (enforced by Kyverno):"
 	@echo "  • Streamer, Collector, Gateway: max 10 replicas"

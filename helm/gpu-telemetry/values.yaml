@@ -140,6 +140,6 @@ postgres:
 # These policies enforce scaling constraints at the Kubernetes API level.
 # Requires Kyverno: helm install kyverno kyverno/kyverno -n kyverno --create-namespace
 policies:
-  enabled: false  # Set to true after installing Kyverno
+  enabled: true  # Kyverno policies for replica limits (installed by make up)
   maxScalableReplicas: 10   # Max for streamer, collector, gateway
   maxSingletonReplicas: 1   # Max for mq, postgres (cannot scale)

@@ -17,6 +17,10 @@ curl http://localhost:8080/api/v1/gpus
 make down
 ```
 
+**Recommended**: Open Swagger UI to explore and test APIs interactively (both auto port-forwarded by `make up`):
+- **Gateway API**: [http://localhost:8080/swagger/index.html](http://localhost:8080/swagger/index.html)
+- **MQ Admin API**: [http://localhost:8082/swagger/index.html](http://localhost:8082/swagger/index.html)
+
 ---
 
 ## For Evaluators / Interviewers
@@ -100,28 +104,86 @@ postgres   ClusterIP   None            5432/TCP
 
 ### Step 4: Test the API
 
-```bash
-# Port-forward is started automatically by 'make up'
-# If you need to restart it manually:
-kubectl port-forward svc/gateway 8080:8080 -n gpu-telemetry
-```
+Port-forward is started automatically by `make up`. API is ready at `http://localhost:8080`.
 
-**In a new terminal:**
+#### Gateway REST API Reference
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/health` | Health check |
+| GET | `/api/v1/gpus` | List all unique GPUs |
+| GET | `/api/v1/gpus/{id}/telemetry` | Get telemetry for a GPU |
+| GET | `/api/v1/gpus/{id}/telemetry?start_time=...&end_time=...` | Filtered telemetry |
+| GET | `/api/v1/gpus/{id}/telemetry?limit=...&offset=...` | Paginated telemetry |
+| GET | `/swagger/index.html` | Swagger UI (interactive docs) |
+
+#### Query Parameters
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `start_time` | string | - | Start time filter (inclusive) |
+| `end_time` | string | - | End time filter (inclusive) |
+| `limit` | int | 100 | Max records (max 1000) |
+| `offset` | int | 0 | Records to skip |
+
+#### Supported Time Formats
+
+| Format | Example |
+|--------|---------|
+| Date only | `2026-01-28` |
+| Date-time | `2026-01-28T15:30:00` |
+| RFC3339 | `2026-01-28T15:30:00Z` |
+| Unix timestamp | `1738022400` |
+
+#### Example curl Commands
 
 ```bash
 # Health check
 curl http://localhost:8080/health
-# Expected: {"status":"healthy","database":"healthy","version":"1.0.0"}
+# Response: {"status":"healthy","database":"healthy","version":"1.0.0"}
 
 # List all GPUs (wait ~30s for data to flow through)
 curl http://localhost:8080/api/v1/gpus
-# Expected: {"gpus":[{"uuid":"GPU-xxx",...}],"count":N}
+# Response: {"gpus":[{"uuid":"GPU-xxx","model_name":"NVIDIA H100",...}],"count":N}
 
 # Get telemetry for a specific GPU
-curl http://localhost:8080/api/v1/gpus/<GPU-UUID>/telemetry
+GPU_ID=$(curl -s http://localhost:8080/api/v1/gpus | jq -r '.gpus[0].uuid')
+curl "http://localhost:8080/api/v1/gpus/${GPU_ID}/telemetry?limit=5"
+
+# Get telemetry with time filter
+curl "http://localhost:8080/api/v1/gpus/${GPU_ID}/telemetry?start_time=2026-01-28&end_time=2026-01-29"
+
+# Get telemetry with pagination
+curl "http://localhost:8080/api/v1/gpus/${GPU_ID}/telemetry?limit=50&offset=100"
 
 # Open Swagger UI in browser
 open http://localhost:8080/swagger/index.html
+```
+
+#### MQ Admin API Reference (Port 8082)
+
+MQ Admin API is auto port-forwarded by `make up` at `http://localhost:8082`.
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/health` | MQ health check |
+| GET | `/api/v1/topics` | List all topics |
+| GET | `/api/v1/topics/{topic}/stats` | Topic statistics |
+| GET | `/api/v1/dlq/{topic}` | List DLQ messages |
+| POST | `/api/v1/dlq/{topic}/replay` | Replay DLQ messages |
+| GET | `/swagger/index.html` | MQ Swagger UI |
+
+```bash
+# List topics
+curl http://localhost:8082/api/v1/topics
+# Response: ["gpu-telemetry"]
+
+# Get topic stats
+curl http://localhost:8082/api/v1/topics/gpu-telemetry/stats
+
+# Check DLQ (empty when healthy)
+curl http://localhost:8082/api/v1/dlq/gpu-telemetry
+# Response: []
 ```
 
 ### Step 5: Test Scaling
@@ -169,13 +231,13 @@ helm upgrade --install telemetry ./helm/gpu-telemetry \
 Edit `helm/gpu-telemetry/values.yaml`:
 ```yaml
 streamer:
-  replicas: 3    # Default: 1, Max: 10
+  replicas: 3    # Default: 5, Max: 10
 
 collector:
-  replicas: 5    # Default: 1, Max: 10
+  replicas: 3    # Default: 5, Max: 10
 
 gateway:
-  replicas: 2    # Default: 1, Max: 10
+  replicas: 3    # Default: 5, Max: 10
 ```
 
 Then redeploy: `make deploy`
@@ -552,22 +614,11 @@ make scale-streamer REPLICAS=5
 # ✓ Streamer scaled to 5 replicas
 ```
 
-**2. Kubernetes Admission Controller (Optional - Kyverno)**
+**2. Kubernetes Admission Controller (Kyverno - Enabled by Default)**
 
-For production-grade enforcement at the Kubernetes API level:
+Kyverno is automatically installed by `make up` for production-grade enforcement at the Kubernetes API level.
 
-```bash
-# Install Kyverno admission controller
-make install-kyverno
-
-# Enable replica limit policies
-make enable-policies
-
-# Test policies are enforced
-make test-policies
-```
-
-With policies enabled, even direct `kubectl` commands are blocked:
+Direct `kubectl` commands are blocked:
 
 ```bash
 kubectl scale deployment mq --replicas=2 -n gpu-telemetry
@@ -601,49 +652,64 @@ make coverage
 ## Project Structure
 
 ```
-gpu-telemetry-pipeline/
+Elastic-GPU-Telemetry/
 ├── Makefile                 # Root orchestration
+├── README.md                # This file
 ├── kind-config.yaml         # Kind cluster config
 ├── helm/
-│   └── gpu-telemetry/       # Helm chart
+│   └── gpu-telemetry/       # Helm umbrella chart
 │       ├── Chart.yaml
 │       ├── values.yaml
 │       └── templates/
+│           ├── mq-deployment.yaml
+│           ├── streamer-deployment.yaml
+│           ├── collector-deployment.yaml
+│           ├── gateway-deployment.yaml
+│           ├── postgres-statefulset.yaml
+│           └── kyverno-policies.yaml
 ├── mq/                      # Custom Message Queue
 │   ├── cmd/main.go
 │   ├── internal/
-│   │   ├── api/             # HTTP handlers
-│   │   ├── broker/          # Core broker logic
+│   │   ├── api/             # HTTP admin handlers
+│   │   ├── broker/          # Core broker + DLQ logic
 │   │   ├── config/
 │   │   └── grpc/            # gRPC server
+│   ├── docs/                # Auto-generated OpenAPI
+│   ├── Makefile
 │   ├── Dockerfile
 │   └── README.md
 ├── streamer/                # Telemetry Streamer
 │   ├── cmd/main.go
 │   ├── internal/
 │   ├── data/dcgm_metrics.csv
+│   ├── Makefile
 │   ├── Dockerfile
 │   └── README.md
 ├── collector/               # Telemetry Collector
 │   ├── cmd/main.go
 │   ├── internal/
+│   ├── Makefile
 │   ├── Dockerfile
 │   └── README.md
 ├── gateway/                 # API Gateway
 │   ├── cmd/main.go
 │   ├── internal/
 │   ├── docs/                # Auto-generated OpenAPI
+│   ├── Makefile
 │   ├── Dockerfile
 │   └── README.md
 ├── db/                      # PostgreSQL
 │   ├── migrations/
+│   ├── Makefile
 │   ├── Dockerfile
 │   └── README.md
 ├── tests/                   # Integration tests
 │   ├── integration/
+│   ├── Makefile
 │   └── README.md
 └── docs/
-    └── DESIGN.md            # Detailed design document
+    ├── DESIGN.md            # System design document
+    └── AI-USAGE.md          # AI assistance documentation
 ```
 
 ## Configuration
@@ -703,7 +769,7 @@ helm upgrade --install telemetry ./helm/gpu-telemetry \
 | Collector | `collector.enabled` | `true` |
 | Gateway | `gateway.enabled` | `true` |
 | PostgreSQL | `postgres.enabled` | `true` |
-| Kyverno Policies | `policies.enabled` | `false` (enabled via `make up`) |
+| Kyverno Policies | `policies.enabled` | `true` (auto-enabled by `make up`) |
 
 ## Makefile Targets
 

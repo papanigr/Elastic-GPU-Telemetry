@@ -278,10 +278,12 @@ if !msg.IsDLQ && now.Sub(msg.Timestamp) > maxAge {
 
 **AI Contribution**:
 - Created comprehensive Makefile with:
-  - `make up` - One-command full setup
-  - `make down` - Full teardown
-  - `make demo` - Port-forward and test
-  - Prerequisite checks with auto-install
+  - `make up` - One-command full setup (includes port-forward)
+  - `make down` - Full teardown (kills port-forwards, deletes cluster)
+  - `make status` - Show deployment status
+  - `make logs` - View logs from all services
+  - `make scale-*` - Scale services with validation
+  - Prerequisite checks with auto-install (Homebrew on macOS)
 
 **Follow-up Prompt**:
 > "Why can't make demo and make up be done in same place, it's easy right?"
@@ -289,17 +291,21 @@ if !msg.IsDLQ && now.Sub(msg.Timestamp) > maxAge {
 **AI Improvement**:
 - Updated `make up` to automatically start port-forward in background after deployment
 - Updated `make down` to kill port-forward processes before teardown
+- Removed separate `make demo` command (no longer needed)
 - Result: Single command (`make up`) now provides fully accessible API at `localhost:8080`
 
 ```bash
-# Before: Two commands needed
-make up
-make demo  # Separate step for port-forward
-
-# After: One command does everything
-make up    # Deploy + port-forward, API ready immediately
+# One command does everything
+make up    # Deploy + port-forward, API ready immediately at localhost:8080
 make down  # Kill port-forward + full cleanup
 ```
+
+**Follow-up Prompt**:
+> "And make down to clear everything?"
+
+**AI Improvement**:
+- Added `pkill` command to kill background port-forward processes
+- Ensures clean teardown with no orphan processes
 
 ---
 
@@ -342,15 +348,27 @@ kind load image-archive /tmp/kind-images/mq.tar --name gpu-telemetry
 ### DockerHub Publishing
 
 **Prompt**:
-> "Can I host all images in my DockerHub and provide only Helm command to deploy everything, without sharing source code?"
+> "Host all images in my DockerHub and provide only Helm command to deploy everything, without sharing source code."
+
+**Follow-up**:
+> "This is my DockerHub account: https://hub.docker.com/u/pp010"
+> "This is my GitHub account: https://github.com/papanigr/"
 
 **AI Contribution**:
+- Identified user accounts: DockerHub (`pp010`), GitHub (`papanigr`)
 - Added `make publish-images` to push all 5 Docker images to DockerHub
 - Added `make helm-push-oci` to push Helm chart to DockerHub OCI registry
 - Added `make publish-all` to publish everything in one command
+- Updated `DOCKER_REGISTRY` in Makefile and `values.yaml` to `pp010`
 - Updated README with deployment instructions for users without source code
 
-**Result**: Full deployment possible with single Helm command:
+**Published Assets**:
+| Asset | Location |
+|-------|----------|
+| Docker Images | `docker.io/pp010/gpu-telemetry-*:latest` |
+| Helm Chart | `oci://registry-1.docker.io/pp010/gpu-telemetry:1.0.0` |
+
+**Result**: Full deployment possible with single Helm command (no source code needed):
 ```bash
 helm install telemetry oci://registry-1.docker.io/pp010/gpu-telemetry \
   --version 1.0.0 \
@@ -359,6 +377,52 @@ helm install telemetry oci://registry-1.docker.io/pp010/gpu-telemetry \
 ```
 
 **Manual Intervention**: Required separate `helm registry login` (Helm uses different auth than Podman).
+
+---
+
+### Kyverno Policies Enabled by Default
+
+**Prompt**:
+> "Kyverno Policies is not optional for us, we are enforcing it. Update values.yaml to set policies.enabled: true as default."
+
+**AI Contribution**:
+- Changed `policies.enabled` from `false` to `true` in `values.yaml`
+- Removed `enable-policies` step from `make up` (no longer needed)
+- Updated README to reflect Kyverno is enabled by default
+
+---
+
+### README Improvements
+
+**Prompt 1**:
+> "Root README is not correct. It still has make demo details."
+
+**AI Fix**: Removed all `make demo` references, updated Quick Start to show API is ready after `make up`.
+
+**Prompt 2**:
+> "This is also wrong: replicas: 3 # Default: 1, Max: 10"
+
+**AI Fix**: Corrected default replica values from 1 to 5 to match `values.yaml`.
+
+**Prompt 3**:
+> "Kubernetes Admission Controller (Optional - Kyverno) - also wrong, it's not optional for us"
+
+**AI Fix**: Changed "(Optional - Kyverno)" to "(Kyverno - Enabled by Default)".
+
+**Prompt 4**:
+> "gpu-telemetry-pipeline/ - wrong"
+
+**AI Fix**: Changed project structure directory name to `Elastic-GPU-Telemetry/` to match actual repository.
+
+**Prompt 5**:
+> "Along with the make commands, all APIs should be also there in README under For Evaluators / Interviewers."
+
+**AI Contribution**:
+- Added comprehensive Gateway REST API reference table
+- Added query parameters table (start_time, end_time, limit, offset)
+- Added supported time formats table
+- Added MQ Admin API reference with port-forward instructions
+- Added example curl commands with expected responses
 
 ---
 
@@ -445,18 +509,19 @@ helm install telemetry oci://registry-1.docker.io/pp010/gpu-telemetry \
 | **Unit Tests** | 90% | 10% (timing adjustments) |
 | **Integration Tests** | 85% | 15% (platform issues) |
 | **Dockerfiles** | 90% | 10% (CSV mounting) |
-| **Helm Charts** | 95% | 5% (Podman compat) |
-| **Makefile** | 90% | 10% (Podman fixes) |
-| **Documentation** | 100% | 0% |
+| **Helm Charts** | 95% | 5% (Podman compat, policies) |
+| **Makefile** | 85% | 15% (Podman fixes, port-forward) |
+| **Documentation** | 90% | 10% (corrections, API docs location) |
 
 ### Overall Assessment
 
-- **~92% of development was AI-assisted**
-- **~8% required manual intervention**
+- **~90% of development was AI-assisted**
+- **~10% required manual intervention/correction**
 - Most manual work was for:
   - Platform-specific issues (Podman, macOS networking)
   - Subtle bugs in complex logic (DLQ cleanup)
   - Tool version compatibility
+  - Documentation accuracy (default values, optional vs required, project structure)
 
 ### Key Learnings
 
