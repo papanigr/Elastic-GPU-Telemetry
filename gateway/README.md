@@ -19,7 +19,7 @@ All HTTP endpoints are served on port **8080** by default.
 | Method | Endpoint | Description | Example |
 |--------|----------|-------------|---------|
 | GET | `/health` | Health check | `curl http://localhost:8080/health` |
-| GET | `/swagger/index.html` | Swagger UI (interactive docs) | Open in browser |
+| GET | `/swagger/index.html` | Swagger UI (interactive docs) | `open http://localhost:8080/swagger/index.html` |
 | GET | `/swagger/doc.json` | OpenAPI spec (JSON) | `curl http://localhost:8080/swagger/doc.json` |
 
 ### GPU & Telemetry Endpoints

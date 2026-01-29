@@ -118,7 +118,7 @@ All HTTP endpoints are served on port **8082** by default.
 | Method | Endpoint | Description | Example |
 |--------|----------|-------------|---------|
 | GET | `/health` | Health check | `curl http://localhost:8082/health` |
-| GET | `/swagger/index.html` | Swagger UI (interactive docs) | Open in browser |
+| GET | `/swagger/index.html` | Swagger UI (interactive docs) | `open http://localhost:8082/swagger/index.html` |
 | GET | `/swagger/doc.json` | OpenAPI spec (JSON) | `curl http://localhost:8082/swagger/doc.json` |
 
 ### Message Operations
@@ -281,6 +281,36 @@ If DB is still down after replay:
 | 12:30 | Second auto-replay |
 | 18:30 | Third auto-replay |
 | 19:00+ | If still failing → Marked as Dead |
+
+### Why Auto-Replay Instead of Direct DLQ Consumer?
+
+An alternative design would have the Collector subscribe directly to the DLQ topic. Here's why we chose auto-replay instead:
+
+| Problem | Direct DLQ Consumer | Auto-Replay Design |
+|---------|--------------------|--------------------|
+| **Infinite loop** | If DB still down, message fails again → Where does it go? Another DLQ? | Message goes back to DLQ with `dlq_retry_count++`, stops after max retries |
+| **Retry counting** | Complex to track retries across two subscriptions | Built-in `retry_count` and `dlq_retry_count` per message |
+| **Dead state** | Need separate logic to stop infinite retries | Automatic `Dead` state after N replays |
+| **Code complexity** | Collector handles 2 topics with different logic | Single consumer path, same code for all messages |
+| **Ordering** | Mixed old DLQ + new messages | DLQ waits in holding area, then rejoins main flow |
+
+**The auto-replay design treats DLQ as a temporary holding area, not a separate processing queue.**
+
+```
+DLQ Design: Holding Area with Auto-Replay
+──────────────────────────────────────────
+                    ┌─────────────┐
+                    │    DLQ      │ ← No consumer needed
+                    │  (holding)  │
+                    └──────┬──────┘
+                           │ After 5 min delay
+                           ▼
+┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+│  Streamer   │────▶│ Main Queue  │────▶│  Collector  │
+│             │     │             │     │ (single     │
+└─────────────┘     └─────────────┘     │  consumer)  │
+                                        └─────────────┘
+```
 
 ## Makefile Targets
 

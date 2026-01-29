@@ -30,12 +30,13 @@ type TestConfig struct {
 // DefaultTestConfig returns the default test configuration.
 // These match the ports in Makefile and docker-compose.test.yml
 // External ports: Gateway=8085, MQ HTTP=8083, MQ gRPC=8084, Postgres=5433
+// Using 127.0.0.1 instead of localhost to ensure IPv4 (containers bind to 0.0.0.0)
 func DefaultTestConfig() TestConfig {
 	return TestConfig{
-		GatewayURL:  getEnv("TEST_GATEWAY_URL", "http://localhost:8085"),
-		MQURL:       getEnv("TEST_MQ_URL", "http://localhost:8083"),
-		MQGRPCAddr:  getEnv("TEST_MQ_GRPC_ADDR", "localhost:8084"),
-		PostgresURL: getEnv("TEST_POSTGRES_URL", "postgres://postgres:postgres@localhost:5433/telemetry_test?sslmode=disable"),
+		GatewayURL:  getEnv("TEST_GATEWAY_URL", "http://127.0.0.1:8085"),
+		MQURL:       getEnv("TEST_MQ_URL", "http://127.0.0.1:8083"),
+		MQGRPCAddr:  getEnv("TEST_MQ_GRPC_ADDR", "127.0.0.1:8084"),
+		PostgresURL: getEnv("TEST_POSTGRES_URL", "postgres://postgres:postgres@127.0.0.1:5433/telemetry_test?sslmode=disable"),
 		Timeout:     30 * time.Second,
 	}
 }

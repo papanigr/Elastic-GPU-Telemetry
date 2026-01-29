@@ -19,9 +19,9 @@ type Topic struct {
 	consumerGroups map[string]*ConsumerGroup
 	mu             sync.RWMutex
 	logger         zerolog.Logger
-	
+
 	// Metrics for graceful degradation monitoring
-	droppedCount   int64  // Total messages dropped due to overflow
+	droppedCount int64 // Total messages dropped due to overflow
 }
 
 // NewTopic creates a new topic.
@@ -310,10 +310,16 @@ func (t *Topic) Cleanup(maxAge, ackTimeout time.Duration, maxRetries, dlqMaxRetr
 			continue
 		}
 
-		// Remove messages older than maxAge (but not DLQ messages)
+		// Remove messages older than maxAge (but not DLQ messages or messages being retried)
+		// Messages with RetryCount > 0 or in Delivered state are being processed and should
+		// be given a chance to move to DLQ rather than being dropped
 		if !msg.IsDLQ && now.Sub(msg.Timestamp) > maxAge {
-			result.Removed++
-			continue
+			// Only drop if message was never consumed (still pending with no retries)
+			if msg.State == models.Pending && msg.RetryCount == 0 {
+				result.Removed++
+				continue
+			}
+			// Messages being retried should go through the normal DLQ flow
 		}
 
 		// Handle DLQ messages
@@ -361,7 +367,7 @@ func (t *Topic) Cleanup(maxAge, ackTimeout time.Duration, maxRetries, dlqMaxRetr
 		// Handle regular messages - Redeliver if not acked in time
 		if msg.State == models.Delivered && now.Sub(msg.DeliveredAt) > ackTimeout {
 			msg.RetryCount++
-			
+
 			// Track first failure
 			if msg.FirstFailedAt.IsZero() {
 				msg.FirstFailedAt = now
@@ -378,7 +384,7 @@ func (t *Topic) Cleanup(maxAge, ackTimeout time.Duration, maxRetries, dlqMaxRetr
 					msg.OriginalTopic = t.name
 					result.MoveToDLQ = append(result.MoveToDLQ, msg)
 					result.MarkedDead++
-					
+
 					t.logger.Warn().
 						Str("message_id", msg.ID).
 						Int("retry_count", msg.RetryCount).
@@ -394,7 +400,7 @@ func (t *Topic) Cleanup(maxAge, ackTimeout time.Duration, maxRetries, dlqMaxRetr
 				msg.DeliverTo = ""
 				msg.DeliveredAt = time.Time{}
 				result.MoveToDLQ = append(result.MoveToDLQ, msg)
-				
+
 				t.logger.Warn().
 					Str("message_id", msg.ID).
 					Int("retry_count", msg.RetryCount).
