@@ -5,11 +5,13 @@ An elastic, scalable telemetry pipeline for AI clusters with a custom message qu
 ## Quick Start
 
 ```bash
-# One command to deploy everything (creates Kind cluster, builds images, deploys via Helm)
+# One command to deploy everything + start API
 make up
+# API immediately available at http://localhost:8080
 
-# Demo the system (port-forwards Gateway, shows sample commands)
-make demo
+# Test the API
+curl http://localhost:8080/health
+curl http://localhost:8080/api/v1/gpus
 
 # Teardown everything
 make down
@@ -99,8 +101,9 @@ postgres   ClusterIP   None            5432/TCP
 ### Step 4: Test the API
 
 ```bash
-# Start port-forwarding (runs in foreground)
-make demo
+# Port-forward is started automatically by 'make up'
+# If you need to restart it manually:
+kubectl port-forward svc/gateway 8080:8080 -n gpu-telemetry
 ```
 
 **In a new terminal:**
@@ -225,8 +228,7 @@ make down
 
 | Command | What it does |
 |---------|--------------|
-| `make up` | Creates Kind cluster, builds images, deploys via Helm |
-| `make demo` | Port-forwards Gateway, shows sample API commands |
+| `make up` | Full setup + port-forward (API ready at localhost:8080) |
 | `make status` | Shows pods, services, deployments |
 | `make scale-streamer REPLICAS=N` | Scale streamer pods (1-10) |
 | `make scale-collector REPLICAS=N` | Scale collector pods (1-10) |
@@ -427,9 +429,8 @@ make helm-package      # Package chart locally (dist/gpu-telemetry-1.0.0.tgz)
 ### Access the API
 
 ```bash
-# Port-forward the Gateway
-make demo
-# or
+# Port-forward is started automatically by 'make up'
+# If you need to restart it manually:
 kubectl port-forward svc/gateway 8080:8080 -n gpu-telemetry
 ```
 
@@ -708,9 +709,8 @@ helm upgrade --install telemetry ./helm/gpu-telemetry \
 
 | Target | Description |
 |--------|-------------|
-| `make up` | Full setup: cluster + build + deploy |
-| `make down` | Full teardown |
-| `make demo` | Port-forward and show sample commands |
+| `make up` | Full setup + port-forward (API ready at localhost:8080) |
+| `make down` | Full teardown (kills port-forward, deletes cluster) |
 | `make status` | Show deployment status |
 | `make logs` | Show logs from all services |
 | `make test-unit` | Run unit tests |
