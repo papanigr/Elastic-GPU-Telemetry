@@ -26,8 +26,6 @@ The project was developed using an **iterative AI-assisted workflow**:
 
 **AI Tool Used**: Claude Opus 4.5 High-Thinking (claude-opus-4-5-20250414) via Cursor IDE Agent Mode
 
-**Estimated Token Usage**: ~500K-1M tokens across multiple sessions (exact tracking not available in Cursor). This project involved extensive code generation, debugging, and documentation over several development sessions.
-
 ---
 
 ## Project Bootstrapping
@@ -285,6 +283,24 @@ if !msg.IsDLQ && now.Sub(msg.Timestamp) > maxAge {
   - `make demo` - Port-forward and test
   - Prerequisite checks with auto-install
 
+**Follow-up Prompt**:
+> "Why can't make demo and make up be done in same place, it's easy right?"
+
+**AI Improvement**:
+- Updated `make up` to automatically start port-forward in background after deployment
+- Updated `make down` to kill port-forward processes before teardown
+- Result: Single command (`make up`) now provides fully accessible API at `localhost:8080`
+
+```bash
+# Before: Two commands needed
+make up
+make demo  # Separate step for port-forward
+
+# After: One command does everything
+make up    # Deploy + port-forward, API ready immediately
+make down  # Kill port-forward + full cleanup
+```
+
 ---
 
 ### Podman/Kind Compatibility
@@ -320,6 +336,29 @@ kind load image-archive /tmp/kind-images/mq.tar --name gpu-telemetry
 - Created `make test-policies` for verification
 
 **Manual Intervention**: None - worked as designed.
+
+---
+
+### DockerHub Publishing
+
+**Prompt**:
+> "Can I host all images in my DockerHub and provide only Helm command to deploy everything, without sharing source code?"
+
+**AI Contribution**:
+- Added `make publish-images` to push all 5 Docker images to DockerHub
+- Added `make helm-push-oci` to push Helm chart to DockerHub OCI registry
+- Added `make publish-all` to publish everything in one command
+- Updated README with deployment instructions for users without source code
+
+**Result**: Full deployment possible with single Helm command:
+```bash
+helm install telemetry oci://registry-1.docker.io/pp010/gpu-telemetry \
+  --version 1.0.0 \
+  --namespace gpu-telemetry \
+  --create-namespace
+```
+
+**Manual Intervention**: Required separate `helm registry login` (Helm uses different auth than Podman).
 
 ---
 

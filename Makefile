@@ -24,21 +24,41 @@ ENGINE := $(notdir $(CONTAINER_ENGINE))
 # ============================================================================
 
 .PHONY: up
-up: check-deps cluster-create docker-build kind-load deploy install-kyverno enable-policies wait status ## Full setup: cluster + build + deploy + policies
+up: check-deps cluster-create docker-build kind-load deploy install-kyverno enable-policies wait status ## Full setup: cluster + build + deploy + policies + port-forward
+	@echo ""
+	@echo "Starting port-forward to Gateway..."
+	@kubectl port-forward svc/gateway 8080:8080 -n $(NAMESPACE) >/dev/null 2>&1 &
+	@sleep 2
 	@echo ""
 	@echo "============================================"
-	@echo "  Setup complete! Run 'make demo' to test"
+	@echo "  Setup complete! API ready at localhost:8080"
 	@echo "============================================"
 	@echo ""
-	@echo "Scaling limits enforced by Kyverno policies:"
+	@echo "Gateway API:  http://localhost:8080"
+	@echo "Swagger UI:   http://localhost:8080/swagger/index.html"
+	@echo "Health Check: curl http://localhost:8080/health"
+	@echo ""
+	@echo "Sample commands:"
+	@echo "  curl http://localhost:8080/api/v1/gpus"
+	@echo "  curl http://localhost:8080/api/v1/gpus/{uuid}/telemetry"
+	@echo ""
+	@echo "Scaling limits (enforced by Kyverno):"
 	@echo "  • Streamer, Collector, Gateway: max 10 replicas"
 	@echo "  • MQ, PostgreSQL: max 1 replica (cannot scale)"
 	@echo ""
-	@echo "Try: make scale-streamer REPLICAS=3"
+	@echo "Commands: make status | make logs | make down"
 	@echo ""
 
 .PHONY: down
-down: undeploy cluster-delete ## Full teardown: undeploy + delete cluster
+down: ## Full teardown: undeploy + delete cluster + kill port-forwards
+	@echo "Stopping port-forwards..."
+	@pkill -f "kubectl port-forward.*gpu-telemetry" 2>/dev/null || true
+	@$(MAKE) undeploy
+	@$(MAKE) cluster-delete
+	@echo ""
+	@echo "============================================"
+	@echo "  Teardown complete!"
+	@echo "============================================"
 
 .PHONY: demo
 demo: ## Demo: show sample API commands

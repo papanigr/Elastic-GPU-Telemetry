@@ -61,8 +61,11 @@ Enabling scaling policies...
 Waiting for pods to be ready...
 
 ============================================
-  Setup complete! Run 'make demo' to test
+  Setup complete! API ready at localhost:8080
 ============================================
+
+Gateway API:  http://localhost:8080
+Swagger UI:   http://localhost:8080/swagger/index.html
 
 Scaling limits enforced by Kyverno policies:
   • Streamer, Collector, Gateway: max 10 replicas
