@@ -64,8 +64,10 @@ WORKDIR /app
 # Copy the binary
 COPY --from=builder /build/streamer .
 
-# Create data directory
-RUN mkdir -p /data && chown -R appuser:appuser /app /data
+# Create data directory and copy CSV file
+RUN mkdir -p /data
+COPY --from=builder /build/data/dcgm_metrics.csv /data/dcgm_metrics.csv
+RUN chown -R appuser:appuser /app /data
 
 # Switch to non-root user
 USER appuser

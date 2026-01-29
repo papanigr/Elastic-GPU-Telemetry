@@ -2,6 +2,34 @@
 
 PostgreSQL database for storing GPU telemetry data. Designed to be deployed as a StatefulSet in Kubernetes.
 
+## Why PostgreSQL?
+
+| Consideration | PostgreSQL | Alternatives |
+|---------------|------------|--------------|
+| **Time-series queries** | Excellent with indexes + optional TimescaleDB | InfluxDB: purpose-built but separate stack |
+| **Complex queries** | Full SQL support, JOINs, aggregations | Cassandra: limited query flexibility |
+| **Ecosystem** | Mature, well-documented, wide adoption | MongoDB: less suited for time-series |
+| **Kubernetes** | StatefulSet + PVC, many operators available | Same for most DBs |
+| **Scalability** | Read replicas, Citus for horizontal | All have scaling options |
+| **Cost** | Open source, no licensing | TimescaleDB has enterprise features |
+
+**Why not a dedicated time-series DB (InfluxDB, TimescaleDB)?**
+- PostgreSQL handles telemetry workloads well with proper indexing
+- Simpler stack: one database technology to manage
+- Can add TimescaleDB extension later if needed (PostgreSQL compatible)
+- REST API queries (list GPUs, filter by time) are relational in nature
+
+**Why not NoSQL (MongoDB, Cassandra)?**
+- Telemetry data has a fixed schema (GPU metrics)
+- Need complex queries: aggregations, time ranges, JOINs with GPU info
+- ACID guarantees for data integrity
+
+**Production scaling path:**
+1. Single PostgreSQL (current) → handles 1000s of writes/sec
+2. Add read replicas → offload Gateway reads
+3. Add TimescaleDB extension → automatic partitioning, compression
+4. Use Citus → horizontal write scaling
+
 ## Overview
 
 This database stores GPU metrics collected from DCGM (Data Center GPU Manager) exporters:

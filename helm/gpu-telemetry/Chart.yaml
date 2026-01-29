@@ -1,0 +1,14 @@
+apiVersion: v2
+name: gpu-telemetry
+description: GPU Telemetry Pipeline - Elastic, scalable telemetry system for AI clusters
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+keywords:
+  - gpu
+  - telemetry
+  - monitoring
+  - kubernetes
+maintainers:
+  - name: papanigr
+home: https://github.com/papanigr/gpu-telemetry-pipeline

@@ -1,0 +1,35 @@
+{{- if .Values.streamer.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: streamer
+  labels:
+    {{- include "gpu-telemetry.labels" . | nindent 4 }}
+    app: streamer
+spec:
+  replicas: {{ .Values.streamer.replicas }}
+  selector:
+    matchLabels:
+      app: streamer
+      {{- include "gpu-telemetry.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        app: streamer
+        {{- include "gpu-telemetry.selectorLabels" . | nindent 8 }}
+    spec:
+      initContainers:
+        # Wait for MQ to be ready before streaming
+        - name: wait-for-mq
+          image: busybox:1.36
+          command: ['sh', '-c', 'until nc -z mq {{ .Values.mq.ports.grpc }}; do echo waiting for mq; sleep 2; done']
+      containers:
+        - name: streamer
+          image: {{ .Values.global.image.registry }}/{{ .Values.streamer.image.name }}:{{ .Values.global.image.tag }}
+          imagePullPolicy: {{ .Values.global.image.pullPolicy }}
+          envFrom:
+            - configMapRef:
+                name: gpu-telemetry-config
+          resources:
+            {{- toYaml .Values.streamer.resources | nindent 12 }}
+{{- end }}

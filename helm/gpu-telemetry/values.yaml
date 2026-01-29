@@ -1,0 +1,145 @@
+# GPU Telemetry Pipeline - Helm Values
+# =====================================
+
+global:
+  image:
+    registry: pp010
+    tag: latest
+    pullPolicy: IfNotPresent
+
+# -----------------------------------------------------------------------------
+# Message Queue (MQ) Broker
+# -----------------------------------------------------------------------------
+mq:
+  enabled: true
+  replicas: 1
+  image:
+    name: gpu-telemetry-mq
+  ports:
+    grpc: 8081
+    http: 8082
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  config:
+    maxQueueSize: "10000"
+    maxMessageAge: "5m"
+    ackTimeout: "30s"
+    cleanupInterval: "10s"
+    logLevel: "info"
+    # DLQ settings
+    dlqEnabled: "true"
+    maxRetries: "3"
+    dlqMaxRetries: "3"
+    dlqRetryDelay: "5m"
+
+# -----------------------------------------------------------------------------
+# Telemetry Streamer
+# -----------------------------------------------------------------------------
+streamer:
+  enabled: true
+  replicas: 5  # Scale from 1-10 (default: 5)
+  image:
+    name: gpu-telemetry-streamer
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+  config:
+    topic: "gpu-telemetry"
+    batchSize: "10"
+    streamInterval: "5s"
+    fullFileBatch: "false"
+    logLevel: "info"
+
+# -----------------------------------------------------------------------------
+# Telemetry Collector
+# -----------------------------------------------------------------------------
+collector:
+  enabled: true
+  replicas: 5  # Scale from 1-10 (default: 5)
+  image:
+    name: gpu-telemetry-collector
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 300m
+      memory: 512Mi
+  config:
+    topic: "gpu-telemetry"
+    consumerGroup: "telemetry-collectors"
+    batchSize: "20"
+    pollInterval: "500ms"
+    numWorkers: "3"
+    dbEnabled: "true"
+    logLevel: "info"
+
+# -----------------------------------------------------------------------------
+# API Gateway
+# -----------------------------------------------------------------------------
+gateway:
+  enabled: true
+  replicas: 5  # Scale from 1-10 (default: 5)
+  image:
+    name: gpu-telemetry-gateway
+  port: 8080
+  service:
+    type: ClusterIP
+    port: 8080
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  config:
+    defaultPageSize: "100"
+    maxPageSize: "1000"
+    logLevel: "info"
+    readTimeout: "30s"
+    writeTimeout: "30s"
+    shutdownTimeout: "10s"
+
+# -----------------------------------------------------------------------------
+# PostgreSQL Database
+# -----------------------------------------------------------------------------
+postgres:
+  enabled: true
+  image:
+    repository: postgres
+    tag: "15-alpine"
+  port: 5432
+  storage:
+    size: 1Gi
+    storageClass: ""  # Use default storage class
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  credentials:
+    database: telemetry
+    username: postgres
+    password: postgres  # Override in production!
+
+# -----------------------------------------------------------------------------
+# Admission Controller Policies (Kyverno)
+# -----------------------------------------------------------------------------
+# These policies enforce scaling constraints at the Kubernetes API level.
+# Requires Kyverno: helm install kyverno kyverno/kyverno -n kyverno --create-namespace
+policies:
+  enabled: false  # Set to true after installing Kyverno
+  maxScalableReplicas: 10   # Max for streamer, collector, gateway
+  maxSingletonReplicas: 1   # Max for mq, postgres (cannot scale)

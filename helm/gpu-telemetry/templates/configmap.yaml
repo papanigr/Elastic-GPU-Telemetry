@@ -1,0 +1,50 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gpu-telemetry-config
+  labels:
+    {{- include "gpu-telemetry.labels" . | nindent 4 }}
+data:
+  # MQ Configuration
+  MQ_GRPC_PORT: {{ .Values.mq.ports.grpc | quote }}
+  MQ_HTTP_PORT: {{ .Values.mq.ports.http | quote }}
+  MQ_MAX_QUEUE_SIZE: {{ .Values.mq.config.maxQueueSize | quote }}
+  MQ_MAX_MESSAGE_AGE: {{ .Values.mq.config.maxMessageAge | quote }}
+  MQ_ACK_TIMEOUT: {{ .Values.mq.config.ackTimeout | quote }}
+  MQ_CLEANUP_INTERVAL: {{ .Values.mq.config.cleanupInterval | quote }}
+  MQ_LOG_LEVEL: {{ .Values.mq.config.logLevel | quote }}
+  MQ_DLQ_ENABLED: {{ .Values.mq.config.dlqEnabled | quote }}
+  MQ_MAX_RETRIES: {{ .Values.mq.config.maxRetries | quote }}
+  MQ_DLQ_MAX_RETRIES: {{ .Values.mq.config.dlqMaxRetries | quote }}
+  MQ_DLQ_RETRY_DELAY: {{ .Values.mq.config.dlqRetryDelay | quote }}
+  
+  # Streamer Configuration
+  STREAMER_MQ_BROKER_ADDR: {{ include "gpu-telemetry.mqGrpcAddr" . | quote }}
+  STREAMER_TOPIC: {{ .Values.streamer.config.topic | quote }}
+  STREAMER_BATCH_SIZE: {{ .Values.streamer.config.batchSize | quote }}
+  STREAMER_STREAM_INTERVAL: {{ .Values.streamer.config.streamInterval | quote }}
+  STREAMER_FULL_FILE_BATCH: {{ .Values.streamer.config.fullFileBatch | quote }}
+  STREAMER_MQ_ENABLED: "true"
+  STREAMER_LOG_LEVEL: {{ .Values.streamer.config.logLevel | quote }}
+  
+  # Collector Configuration
+  COLLECTOR_MQ_BROKER_ADDR: {{ include "gpu-telemetry.mqGrpcAddr" . | quote }}
+  COLLECTOR_TOPIC: {{ .Values.collector.config.topic | quote }}
+  COLLECTOR_CONSUMER_GROUP: {{ .Values.collector.config.consumerGroup | quote }}
+  COLLECTOR_BATCH_SIZE: {{ .Values.collector.config.batchSize | quote }}
+  COLLECTOR_POLL_INTERVAL: {{ .Values.collector.config.pollInterval | quote }}
+  COLLECTOR_NUM_WORKERS: {{ .Values.collector.config.numWorkers | quote }}
+  COLLECTOR_DB_ENABLED: {{ .Values.collector.config.dbEnabled | quote }}
+  COLLECTOR_LOG_LEVEL: {{ .Values.collector.config.logLevel | quote }}
+  
+  # Gateway Configuration
+  GATEWAY_HTTP_PORT: {{ .Values.gateway.port | quote }}
+  GATEWAY_DEFAULT_PAGE_SIZE: {{ .Values.gateway.config.defaultPageSize | quote }}
+  GATEWAY_MAX_PAGE_SIZE: {{ .Values.gateway.config.maxPageSize | quote }}
+  GATEWAY_LOG_LEVEL: {{ .Values.gateway.config.logLevel | quote }}
+  GATEWAY_READ_TIMEOUT: {{ .Values.gateway.config.readTimeout | quote }}
+  GATEWAY_WRITE_TIMEOUT: {{ .Values.gateway.config.writeTimeout | quote }}
+  GATEWAY_SHUTDOWN_TIMEOUT: {{ .Values.gateway.config.shutdownTimeout | quote }}
+  
+  # PostgreSQL Configuration
+  POSTGRES_DB: {{ .Values.postgres.credentials.database | quote }}

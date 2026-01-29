@@ -1,0 +1,49 @@
+{{- if .Values.mq.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mq
+  labels:
+    {{- include "gpu-telemetry.labels" . | nindent 4 }}
+    app: mq
+spec:
+  replicas: {{ .Values.mq.replicas }}
+  selector:
+    matchLabels:
+      app: mq
+      {{- include "gpu-telemetry.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        app: mq
+        {{- include "gpu-telemetry.selectorLabels" . | nindent 8 }}
+    spec:
+      containers:
+        - name: mq
+          image: {{ .Values.global.image.registry }}/{{ .Values.mq.image.name }}:{{ .Values.global.image.tag }}
+          imagePullPolicy: {{ .Values.global.image.pullPolicy }}
+          ports:
+            - name: grpc
+              containerPort: {{ .Values.mq.ports.grpc }}
+              protocol: TCP
+            - name: http
+              containerPort: {{ .Values.mq.ports.http }}
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: gpu-telemetry-config
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          resources:
+            {{- toYaml .Values.mq.resources | nindent 12 }}
+{{- end }}

@@ -6,15 +6,18 @@
 3. [Architecture](#3-architecture)
 4. [Component Design](#4-component-design)
 5. [Custom Message Queue Design](#5-custom-message-queue-design)
-6. [Data Models](#6-data-models)
-7. [API Design](#7-api-design)
-8. [Storage Design](#8-storage-design)
-9. [Deployment Architecture](#9-deployment-architecture)
-10. [Scaling Strategy](#10-scaling-strategy)
-11. [Error Handling & Resilience](#11-error-handling--resilience)
-12. [Observability](#12-observability)
-13. [Security Considerations](#13-security-considerations)
-14. [Technology Decisions](#14-technology-decisions)
+6. [Dead Letter Queue (DLQ)](#6-dead-letter-queue-dlq)
+7. [Data Models](#7-data-models)
+8. [API Design](#8-api-design)
+9. [Storage Design](#9-storage-design)
+10. [Deployment Architecture](#10-deployment-architecture)
+11. [Deployment Order & Dependencies](#11-deployment-order--dependencies)
+12. [Scaling Strategy](#12-scaling-strategy)
+13. [Admission Controller (Kyverno)](#13-admission-controller-kyverno)
+14. [Error Handling & Resilience](#14-error-handling--resilience)
+15. [Observability](#15-observability)
+16. [Security Considerations](#16-security-considerations)
+17. [Technology Decisions](#17-technology-decisions)
 
 ---
 
@@ -48,7 +51,7 @@ This document describes the design of an **Elastic GPU Telemetry Pipeline** that
 │  ┌──────────────┐   │  │   Service     │  │                 │              │
 │  │  Telemetry   │   │  │               │  │    ┌────────────┴────────────┐ │
 │  │  Streamer    ├───┼─►│  - Topics     │  │    │                         │ │
-│  │  (1-10)      │   │  │  - Queues     │──┼───►│   Telemetry Collector   │ │
+│  │  (1-10)      │   │  │  - DLQ        │──┼───►│   Telemetry Collector   │ │
 │  └──────────────┘   │  │  - Pub/Sub    │  │    │       (1-10)            │ │
 │                     │  └───────────────┘  │    │                         │ │
 │                     │                     │    └────────────┬────────────┘ │
@@ -138,19 +141,23 @@ This document describes the design of an **Elastic GPU Telemetry Pipeline** that
 
 ```
 ┌──────────────┐         ┌──────────────┐         ┌──────────────┐
-│   Streamer   │  HTTP   │   Message    │  HTTP   │  Collector   │
+│   Streamer   │  gRPC   │   Message    │  gRPC   │  Collector   │
 │              ├────────►│   Queue      ├────────►│              │
-│  (Producer)  │  POST   │   Broker     │  Long   │  (Consumer)  │
-│              │         │              │  Poll   │              │
+│  (Producer)  │ Publish │   Broker     │Subscribe│  (Consumer)  │
+│              │         │   :8081      │  :8081  │              │
 └──────────────┘         └──────────────┘         └──────┬───────┘
-                                                         │
-                                                         │ SQL
-                                                         ▼
-┌──────────────┐         ┌──────────────┐         ┌──────────────┐
+                               │                         │
+                               │ HTTP :8082              │ SQL
+                               │ (Admin APIs)            ▼
+┌──────────────┐         ┌─────┴────────┐         ┌──────────────┐
 │   Client     │  HTTP   │     API      │  SQL    │  PostgreSQL  │
 │              │◄───────►│   Gateway    │◄───────►│              │
-│              │  REST   │              │         │              │
+│              │  REST   │    :8080     │         │    :5432     │
 └──────────────┘         └──────────────┘         └──────────────┘
+
+MQ Ports:
+  - 8081: gRPC (Publish/Subscribe - used by Streamer/Collector)
+  - 8082: HTTP (Admin APIs, Swagger, Health checks)
 ```
 
 ---
@@ -357,9 +364,9 @@ func (c *Collector) Run(ctx context.Context) error {
 The custom message queue is the heart of this system. It provides:
 - **Topic-based pub/sub**
 - **Consumer groups** for load balancing
-- **Message persistence** (in-memory with optional disk backup)
+- **Dead Letter Queue (DLQ)** for failed messages with auto-replay
 - **At-least-once delivery** semantics
-- **HTTP-based protocol** for simplicity
+- **Dual protocol**: gRPC (inter-service, high performance) + HTTP (admin APIs)
 
 ### 5.2 Architecture
 
@@ -564,7 +571,98 @@ Response (200 OK):
 
 ---
 
-## 6. Data Models
+## 6. Dead Letter Queue (DLQ)
+
+### 6.1 Overview
+
+The DLQ handles messages that fail processing (e.g., database down). Instead of losing messages or infinite retries, failed messages are moved to a DLQ for later replay.
+
+### 6.2 DLQ Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                    MESSAGE LIFECYCLE WITH DLQ                        │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│  ┌──────────┐     ┌──────────┐     ┌──────────┐     ┌──────────┐   │
+│  │ PENDING  │────▶│ DELIVERED│────▶│  ACKED   │────▶│ REMOVED  │   │
+│  └──────────┘     └────┬─────┘     └──────────┘     └──────────┘   │
+│                        │                                             │
+│                        │ NACK (failure)                              │
+│                        ▼                                             │
+│                   ┌──────────┐                                       │
+│                   │  RETRY   │ (retry_count++)                       │
+│                   └────┬─────┘                                       │
+│                        │                                             │
+│                        │ retry_count > MAX_RETRIES                   │
+│                        ▼                                             │
+│                   ┌──────────┐                                       │
+│                   │   DLQ    │ (dlq_retry_count = 0)                │
+│                   └────┬─────┘                                       │
+│                        │                                             │
+│                        │ After DLQ_RETRY_DELAY (5 min)              │
+│                        ▼                                             │
+│                   ┌──────────┐                                       │
+│                   │ REPLAYED │ Back to main topic                    │
+│                   │ TO TOPIC │ (dlq_retry_count++)                  │
+│                   └────┬─────┘                                       │
+│                        │                                             │
+│                        │ dlq_retry_count > DLQ_MAX_RETRIES          │
+│                        ▼                                             │
+│                   ┌──────────┐                                       │
+│                   │   DEAD   │ Requires manual intervention          │
+│                   └──────────┘                                       │
+│                                                                      │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### 6.3 Why Auto-Replay Instead of Direct DLQ Consumer?
+
+| Problem | Direct DLQ Consumer | Auto-Replay Design |
+|---------|--------------------|--------------------|
+| **Infinite loop** | If DB still down, message fails again → Where does it go? | Message goes back to DLQ with `dlq_retry_count++`, stops after max retries |
+| **Retry counting** | Complex to track retries across two subscriptions | Built-in `retry_count` and `dlq_retry_count` per message |
+| **Dead state** | Need separate logic to stop infinite retries | Automatic `Dead` state after N replays |
+| **Code complexity** | Collector handles 2 topics with different logic | Single consumer path, same code for all messages |
+
+### 6.4 DLQ Configuration
+
+```yaml
+MQ_DLQ_ENABLED: "true"       # Enable DLQ functionality
+MQ_MAX_RETRIES: "3"          # Retries before moving to DLQ
+MQ_DLQ_MAX_RETRIES: "3"      # DLQ replays before marking Dead
+MQ_DLQ_RETRY_DELAY: "5m"     # Wait time between DLQ replays
+```
+
+### 6.5 DLQ Admin APIs
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /api/v1/topics/{topic}/dlq` | List messages in DLQ |
+| `GET /api/v1/topics/{topic}/dlq/count` | Count DLQ messages |
+| `POST /api/v1/topics/{topic}/dlq/replay` | Manually trigger replay |
+| `DELETE /api/v1/topics/{topic}/dlq/{id}` | Remove message from DLQ |
+| `GET /api/v1/topics/{topic}/dead` | List dead messages |
+
+### 6.6 DLQ Timeline Example
+
+```
+Time  | Event
+──────┼──────────────────────────────────────────────
+00:00 | Message published, DB is down
+00:00 | Collector NACKs → retry_count=1
+00:01 | Retry 2 fails → retry_count=2
+00:02 | Retry 3 fails → retry_count=3
+00:03 | Moved to DLQ (max retries exceeded)
+00:08 | Auto-replay #1 → dlq_retry_count=1, fails
+00:13 | Auto-replay #2 → dlq_retry_count=2, fails
+00:18 | Auto-replay #3 → dlq_retry_count=3, fails
+00:23 | Marked as DEAD (max DLQ retries exceeded)
+```
+
+---
+
+## 7. Data Models
 
 ### 6.1 GPU Telemetry Record
 
@@ -630,7 +728,7 @@ type TelemetryResponse struct {
 
 ---
 
-## 7. API Design
+## 8. API Design
 
 ### 7.1 OpenAPI Specification (Auto-generated)
 
@@ -689,7 +787,7 @@ type ErrorResponse struct {
 
 ---
 
-## 8. Storage Design
+## 9. Storage Design
 
 ### 8.1 PostgreSQL Schema
 
@@ -766,7 +864,7 @@ type TelemetryRepository interface {
 
 ---
 
-## 9. Deployment Architecture
+## 10. Deployment Architecture
 
 ### 9.1 Kubernetes Resources
 
@@ -852,77 +950,285 @@ helm/
 
 ---
 
-## 10. Scaling Strategy
+## 11. Deployment Order & Dependencies
 
-### 10.1 Horizontal Pod Autoscaler
+### 11.1 Service Dependencies
 
-```yaml
-# Streamer HPA
-apiVersion: autoscaling/v2
-kind: HorizontalPodAutoscaler
-metadata:
-  name: streamer-hpa
-spec:
-  scaleTargetRef:
-    apiVersion: apps/v1
-    kind: Deployment
-    name: telemetry-streamer
-  minReplicas: 1
-  maxReplicas: 10
-  metrics:
-  - type: Resource
-    resource:
-      name: cpu
-      target:
-        type: Utilization
-        averageUtilization: 70
+Services are deployed simultaneously but use **init containers** to wait for dependencies:
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                    DEPLOYMENT ORDER                                  │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│   Phase 1: Infrastructure (no dependencies)                         │
+│   ┌──────────────┐    ┌──────────────┐                              │
+│   │  PostgreSQL  │    │      MQ      │                              │
+│   │ (StatefulSet)│    │ (Deployment) │                              │
+│   └──────────────┘    └──────────────┘                              │
+│          │                   │                                       │
+│          ▼                   ▼                                       │
+│   Phase 2: Services (wait via init containers)                      │
+│                                                                      │
+│   ┌─────────────────────────────────────────┐                       │
+│   │  Gateway         waits for: PostgreSQL  │                       │
+│   └─────────────────────────────────────────┘                       │
+│                                                                      │
+│   ┌─────────────────────────────────────────┐                       │
+│   │  Collector       waits for: PostgreSQL  │                       │
+│   │                            + MQ         │                       │
+│   └─────────────────────────────────────────┘                       │
+│                                                                      │
+│   ┌─────────────────────────────────────────┐                       │
+│   │  Streamer        waits for: MQ          │                       │
+│   └─────────────────────────────────────────┘                       │
+│                                                                      │
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
-### 10.2 Scaling Considerations
+### 11.2 Init Container Configuration
+
+```yaml
+# Collector deployment - waits for both PostgreSQL and MQ
+initContainers:
+  - name: wait-for-postgres
+    image: busybox:1.36
+    command: ['sh', '-c', 'until nc -z postgres 5432; do echo waiting for postgres; sleep 2; done']
+  - name: wait-for-mq
+    image: busybox:1.36
+    command: ['sh', '-c', 'until nc -z mq 8081; do echo waiting for mq; sleep 2; done']
+```
+
+### 11.3 Startup Timeline
+
+```
+Time ──────────────────────────────────────────────────────▶
+
+PostgreSQL  ████████████████████████████████████████████████▶ (ready ~15s)
+MQ          ██████████████████████████████████████████████████▶ (ready ~10s)
+                         │
+                         ▼ (dependencies ready)
+Gateway     ░░░░░░░░░░░░░████████████████████████████████████▶
+            (waiting)
+
+Streamer    ░░░░░░░░░░░░░████████████████████████████████████▶
+            (waiting)
+
+Collector   ░░░░░░░░░░░░░░░░░████████████████████████████████▶
+            (waiting for both)
+
+░░░ = init container waiting
+███ = running
+```
+
+### 11.4 Dependency Matrix
+
+| Component | PostgreSQL | MQ | Init Container |
+|-----------|------------|-----|----------------|
+| PostgreSQL | - | - | None |
+| MQ | - | - | None |
+| Gateway | ✅ | - | `wait-for-postgres` |
+| Streamer | - | ✅ | `wait-for-mq` |
+| Collector | ✅ | ✅ | `wait-for-postgres`, `wait-for-mq` |
+
+---
+
+## 12. Scaling Strategy
+
+### 12.1 Scaling Constraints
+
+| Component | Min | Max | Can Scale? | Reason |
+|-----------|-----|-----|------------|--------|
+| **Streamer** | 1 | 10 | ✅ Yes | Stateless, each reads CSV and publishes |
+| **Collector** | 1 | 10 | ✅ Yes | Stateless, MQ distributes via consumer groups |
+| **Gateway** | 1 | 10 | ✅ Yes | Stateless, all read from shared PostgreSQL |
+| **MQ Broker** | 1 | 1 | ❌ No | In-memory state, cannot scale horizontally |
+| **PostgreSQL** | 1 | 1 | ❌ No | Single-writer database |
+
+### 12.2 Why MQ Cannot Scale Horizontally
+
+```
+┌─────────────────────────────────────────────────────────┐
+│              Multiple MQ Replicas = Broken              │
+├─────────────────────────────────────────────────────────┤
+│                                                         │
+│   Streamer ──publish──▶ MQ Pod-1 (has message)         │
+│                                                         │
+│   Collector ◀──subscribe── MQ Pod-2 (empty!)           │
+│                                                         │
+│   Result: Message never delivered!                      │
+└─────────────────────────────────────────────────────────┘
+```
+
+**To scale MQ horizontally, you would need:**
+- Shared state backend (Redis, etcd)
+- Or use a production MQ (Kafka, NATS, RabbitMQ)
+
+### 12.3 Why PostgreSQL Cannot Scale Horizontally
+
+```
+┌─────────────────────────────────────────────────────────┐
+│           Multiple PostgreSQL = Data Corruption         │
+├─────────────────────────────────────────────────────────┤
+│                                                         │
+│   Pod-1: INSERT INTO telemetry VALUES (...)  ──┐       │
+│   Pod-2: INSERT INTO telemetry VALUES (...)  ──┼─ ???  │
+│   Pod-3: INSERT INTO telemetry VALUES (...)  ──┘       │
+│                                                         │
+│   Each pod has its own PVC. No shared state.            │
+│   Writes to Pod-1 are invisible to Pod-2!               │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Production scaling options:**
+
+| Approach | Description | Use Case |
+|----------|-------------|----------|
+| **Read Replicas** | 1 primary (writes) + N replicas (reads) | Read-heavy workloads |
+| **Patroni/HA** | Automatic failover, still 1 writer | High availability |
+| **Citus** | Distributed PostgreSQL with sharding | Horizontal writes |
+| **Managed DB** | AWS RDS, GCP Cloud SQL | Production deployments |
+
+### 12.4 Scaling Diagram
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    SCALING DIAGRAM                          │
+│                    SCALING ARCHITECTURE                      │
 ├─────────────────────────────────────────────────────────────┤
 │                                                             │
 │  Load Increase                                              │
 │       │                                                     │
 │       ▼                                                     │
 │  ┌─────────┐    ┌─────────┐    ┌─────────┐                │
-│  │Streamer │    │Streamer │    │Streamer │  ← Scale Out   │
+│  │Streamer │    │Streamer │    │Streamer │  ← Scale 1-10  │
 │  │   1     │    │   2     │    │   N     │                │
 │  └────┬────┘    └────┬────┘    └────┬────┘                │
 │       │              │              │                       │
 │       └──────────────┼──────────────┘                       │
 │                      ▼                                      │
 │              ┌───────────────┐                              │
-│              │  MQ Broker    │  ← Single instance          │
-│              │  (Buffering)  │    handles backpressure     │
+│              │  MQ Broker    │  ← SINGLE INSTANCE          │
+│              │  (in-memory)  │    (cannot scale!)          │
 │              └───────┬───────┘                              │
 │                      │                                      │
 │       ┌──────────────┼──────────────┐                       │
 │       │              │              │                       │
 │       ▼              ▼              ▼                       │
 │  ┌─────────┐    ┌─────────┐    ┌─────────┐                │
-│  │Collector│    │Collector│    │Collector│  ← Scale Out   │
+│  │Collector│    │Collector│    │Collector│  ← Scale 1-10  │
 │  │   1     │    │   2     │    │   N     │                │
 │  └────┬────┘    └────┬────┘    └────┬────┘                │
 │       │              │              │                       │
 │       └──────────────┼──────────────┘                       │
 │                      ▼                                      │
 │              ┌───────────────┐                              │
-│              │  PostgreSQL   │  ← Single instance          │
-│              │               │    (could add read replicas)│
+│              │  PostgreSQL   │  ← SINGLE INSTANCE          │
+│              │               │    (single-writer)          │
 │              └───────────────┘                              │
 │                                                             │
 └─────────────────────────────────────────────────────────────┘
 ```
 
+### 12.5 PostgreSQL Concurrency with Multiple Collectors/Gateways
+
+PostgreSQL handles 10 Collectors + 10 Gateways well because:
+
+| Aspect | Behavior |
+|--------|----------|
+| **Concurrent Reads** | Excellent - PostgreSQL's strength with MVCC |
+| **Concurrent Writes** | Good - Each INSERT is independent, minimal contention |
+| **Connections** | 20 total (well under default limit of 100) |
+| **Read/Write Mix** | Writers don't block readers (MVCC) |
+
 ---
 
-## 11. Error Handling & Resilience
+## 13. Admission Controller (Kyverno)
 
-### 11.1 Retry Strategy
+### 13.1 Overview
+
+Scaling limits are enforced at two levels:
+1. **Makefile validation** - Prevents `make scale-*` commands from exceeding limits
+2. **Kyverno policies** - Enforces limits at Kubernetes API level (blocks `kubectl scale`)
+
+### 13.2 Kyverno Policies
+
+```yaml
+# Policy: Limit scalable replicas (max 10)
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: limit-scalable-replicas
+spec:
+  validationFailureAction: Enforce
+  rules:
+    - name: limit-streamer-replicas
+      match:
+        resources:
+          kinds: [Deployment]
+          names: [streamer]
+      validate:
+        message: "Streamer replicas must be between 1 and 10"
+        pattern:
+          spec:
+            replicas: "1-10"
+```
+
+```yaml
+# Policy: Limit singleton replicas (max 1)
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: limit-singleton-replicas
+spec:
+  validationFailureAction: Enforce
+  rules:
+    - name: limit-mq-replicas
+      match:
+        resources:
+          kinds: [Deployment]
+          names: [mq]
+      validate:
+        message: "MQ must have exactly 1 replica"
+        pattern:
+          spec:
+            replicas: 1
+```
+
+### 13.3 Policy Enforcement Examples
+
+```bash
+# Allowed: Scale streamer to 5
+kubectl scale deployment streamer --replicas=5 -n gpu-telemetry
+# ✓ deployment.apps/streamer scaled
+
+# Blocked: Scale streamer beyond limit
+kubectl scale deployment streamer --replicas=15 -n gpu-telemetry
+# Error: Streamer replicas must be between 1 and 10
+
+# Blocked: Scale MQ (singleton)
+kubectl scale deployment mq --replicas=2 -n gpu-telemetry
+# Error: MQ must have exactly 1 replica (in-memory broker cannot scale)
+
+# Blocked: Scale PostgreSQL (singleton)
+kubectl scale statefulset postgres --replicas=2 -n gpu-telemetry
+# Error: PostgreSQL must have exactly 1 replica (single-writer database)
+```
+
+### 13.4 Installing Kyverno
+
+```bash
+# Kyverno is installed automatically with `make up`
+# Or manually:
+make install-kyverno
+make enable-policies
+make test-policies
+```
+
+---
+
+## 14. Error Handling & Resilience
+
+### 14.1 Retry Strategy
 
 ```go
 type RetryConfig struct {
@@ -941,7 +1247,7 @@ var DefaultRetryConfig = RetryConfig{
 }
 ```
 
-### 11.2 Circuit Breaker Pattern
+### 14.2 Circuit Breaker Pattern
 
 ```
      ┌─────────────────────────────────────────┐
@@ -963,7 +1269,7 @@ var DefaultRetryConfig = RetryConfig{
      └─────────────────────────────────────────┘
 ```
 
-### 11.3 Graceful Shutdown
+### 14.3 Graceful Shutdown
 
 ```go
 func (s *Server) GracefulShutdown(timeout time.Duration) error {
@@ -994,9 +1300,9 @@ func (s *Server) GracefulShutdown(timeout time.Duration) error {
 
 ---
 
-## 12. Observability
+## 15. Observability
 
-### 12.1 Logging
+### 15.1 Logging
 
 ```go
 // Structured logging with zerolog
@@ -1008,7 +1314,7 @@ log.Info().
     Msg("Published telemetry batch")
 ```
 
-### 12.2 Metrics (Prometheus)
+### 15.2 Metrics (Prometheus)
 
 ```go
 // Key metrics to expose
@@ -1040,7 +1346,7 @@ var (
 )
 ```
 
-### 12.3 Health Checks
+### 15.3 Health Checks
 
 ```go
 // Liveness - is the service running?
@@ -1070,9 +1376,9 @@ func (h *Handler) ReadinessCheck(w http.ResponseWriter, r *http.Request) {
 
 ---
 
-## 13. Security Considerations
+## 16. Security Considerations
 
-### 13.1 Network Policies
+### 16.1 Network Policies
 
 ```yaml
 apiVersion: networking.k8s.io/v1
@@ -1101,7 +1407,7 @@ spec:
       port: 5432
 ```
 
-### 13.2 Secrets Management
+### 16.2 Secrets Management
 
 - Database credentials stored in Kubernetes Secrets
 - Secrets mounted as environment variables
@@ -1109,9 +1415,9 @@ spec:
 
 ---
 
-## 14. Technology Decisions
+## 17. Technology Decisions
 
-### 14.1 Why These Choices?
+### 17.1 Why These Choices?
 
 | Decision | Choice | Rationale |
 |----------|--------|-----------|
@@ -1124,7 +1430,7 @@ spec:
 | Config | Viper | Standard Go config library |
 | Testing | testify | Assertions and mocking |
 
-### 14.2 Database Choice: PostgreSQL vs MongoDB
+### 17.2 Database Choice: PostgreSQL vs Alternatives
 
 #### Why PostgreSQL Was Chosen
 
@@ -1173,7 +1479,7 @@ MongoDB would be preferred if:
 
 For fixed-schema, time-series GPU telemetry with range queries and a limit of 10 streamer/collector instances, **PostgreSQL is the optimal choice**.
 
-### 14.3 Other Alternative Considerations
+### 17.3 Other Alternative Considerations
 
 | Component | Chosen | Alternative | Why Not |
 |-----------|--------|-------------|---------|
@@ -1311,5 +1617,20 @@ all: build test docker kind-load deploy
 
 ---
 
-*Document Version: 1.0*  
-*Last Updated: January 2025*
+*Document Version: 2.0*  
+*Last Updated: January 2026*
+
+---
+
+## Changelog
+
+### Version 2.0 (January 2026)
+- Added **Dead Letter Queue (DLQ)** design with auto-replay mechanism
+- Added **Deployment Order & Dependencies** section with init containers
+- Added **Admission Controller (Kyverno)** for enforcing scaling limits
+- Updated **Scaling Strategy** with detailed constraints for MQ and PostgreSQL
+- Updated MQ to show **dual protocol** (gRPC + HTTP)
+- Added PostgreSQL concurrency explanation with multiple Collectors/Gateways
+
+### Version 1.0 (January 2025)
+- Initial design document

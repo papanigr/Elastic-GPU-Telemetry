@@ -1,0 +1,120 @@
+{{- if .Values.policies.enabled }}
+# ============================================================================
+# Kyverno Cluster Policies for Replica Limits
+# ============================================================================
+# These policies enforce scaling constraints at the Kubernetes API level.
+# Requires Kyverno to be installed: helm install kyverno kyverno/kyverno -n kyverno --create-namespace
+#
+# Constraints:
+#   - Streamer, Collector, Gateway: max 10 replicas
+#   - MQ, PostgreSQL: max 1 replica (singleton services)
+# ============================================================================
+
+---
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: limit-scalable-replicas
+  annotations:
+    policies.kyverno.io/title: Limit Scalable Service Replicas
+    policies.kyverno.io/description: >-
+      Limits streamer, collector, and gateway deployments to maximum 10 replicas.
+      These services are stateless and can scale horizontally.
+spec:
+  validationFailureAction: Enforce
+  background: false
+  rules:
+    - name: limit-streamer-replicas
+      match:
+        any:
+          - resources:
+              kinds:
+                - Deployment
+              names:
+                - streamer
+              namespaces:
+                - {{ .Release.Namespace }}
+      validate:
+        message: "Streamer replicas must be between 1 and {{ .Values.policies.maxScalableReplicas }}. Requested: {{`{{request.object.spec.replicas}}`}}"
+        pattern:
+          spec:
+            replicas: "1-{{ .Values.policies.maxScalableReplicas }}"
+
+    - name: limit-collector-replicas
+      match:
+        any:
+          - resources:
+              kinds:
+                - Deployment
+              names:
+                - collector
+              namespaces:
+                - {{ .Release.Namespace }}
+      validate:
+        message: "Collector replicas must be between 1 and {{ .Values.policies.maxScalableReplicas }}. Requested: {{`{{request.object.spec.replicas}}`}}"
+        pattern:
+          spec:
+            replicas: "1-{{ .Values.policies.maxScalableReplicas }}"
+
+    - name: limit-gateway-replicas
+      match:
+        any:
+          - resources:
+              kinds:
+                - Deployment
+              names:
+                - gateway
+              namespaces:
+                - {{ .Release.Namespace }}
+      validate:
+        message: "Gateway replicas must be between 1 and {{ .Values.policies.maxScalableReplicas }}. Requested: {{`{{request.object.spec.replicas}}`}}"
+        pattern:
+          spec:
+            replicas: "1-{{ .Values.policies.maxScalableReplicas }}"
+
+---
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: limit-singleton-replicas
+  annotations:
+    policies.kyverno.io/title: Limit Singleton Service Replicas
+    policies.kyverno.io/description: >-
+      Limits MQ and PostgreSQL to exactly 1 replica.
+      MQ is in-memory (no shared state) and PostgreSQL is single-writer.
+spec:
+  validationFailureAction: Enforce
+  background: false
+  rules:
+    - name: limit-mq-replicas
+      match:
+        any:
+          - resources:
+              kinds:
+                - Deployment
+              names:
+                - mq
+              namespaces:
+                - {{ .Release.Namespace }}
+      validate:
+        message: "MQ must have exactly 1 replica (in-memory broker cannot scale horizontally)"
+        pattern:
+          spec:
+            replicas: 1
+
+    - name: limit-postgres-replicas
+      match:
+        any:
+          - resources:
+              kinds:
+                - StatefulSet
+              names:
+                - postgres
+              namespaces:
+                - {{ .Release.Namespace }}
+      validate:
+        message: "PostgreSQL must have exactly 1 replica (single-writer database)"
+        pattern:
+          spec:
+            replicas: 1
+{{- end }}

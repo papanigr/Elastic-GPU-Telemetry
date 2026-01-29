@@ -1,0 +1,23 @@
+{{- if .Values.mq.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: mq
+  labels:
+    {{- include "gpu-telemetry.labels" . | nindent 4 }}
+    app: mq
+spec:
+  type: ClusterIP
+  ports:
+    - name: grpc
+      port: {{ .Values.mq.ports.grpc }}
+      targetPort: grpc
+      protocol: TCP
+    - name: http
+      port: {{ .Values.mq.ports.http }}
+      targetPort: http
+      protocol: TCP
+  selector:
+    app: mq
+    {{- include "gpu-telemetry.selectorLabels" . | nindent 4 }}
+{{- end }}

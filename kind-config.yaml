@@ -1,0 +1,24 @@
+# Kind cluster configuration for GPU Telemetry Pipeline
+# This creates a single-node cluster with port mappings for local access
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: gpu-telemetry
+nodes:
+  - role: control-plane
+    # Map container ports to host for easy access
+    extraPortMappings:
+      # Gateway NodePort (optional - use port-forward instead for flexibility)
+      - containerPort: 30080
+        hostPort: 30080
+        protocol: TCP
+      # MQ HTTP NodePort (optional)
+      - containerPort: 30082
+        hostPort: 30082
+        protocol: TCP
+    # Increase resources for better performance
+    kubeadmConfigPatches:
+      - |
+        kind: InitConfiguration
+        nodeRegistration:
+          kubeletExtraArgs:
+            node-labels: "ingress-ready=true"
