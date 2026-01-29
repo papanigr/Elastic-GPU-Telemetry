@@ -1,0 +1,126 @@
+version: '3.8'
+
+# Integration Test Environment
+# Usage: docker-compose -f docker-compose.test.yml up -d
+
+services:
+  # PostgreSQL (same as db/ service)
+  postgres:
+    image: postgres:15-alpine
+    container_name: test-postgres
+    environment:
+      POSTGRES_DB: telemetry_test
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5433:5432"  # Different port to avoid conflicts
+    volumes:
+      - ../db/init:/docker-entrypoint-initdb.d/init:ro
+      - ../db/migrations:/docker-entrypoint-initdb.d/migrations:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d telemetry_test"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - test-network
+
+  # Message Queue
+  # Internal ports: gRPC=8081, HTTP=8082 (per mq/internal/config/config.go)
+  mq:
+    build:
+      context: ../mq
+      dockerfile: Dockerfile
+    container_name: test-mq
+    environment:
+      MQ_GRPC_PORT: "8081"
+      MQ_HTTP_PORT: "8082"
+      MQ_MAX_QUEUE_SIZE: "10000"
+      MQ_LOG_LEVEL: "debug"
+    ports:
+      - "8084:8081"  # gRPC (external:internal)
+      - "8083:8082"  # HTTP (external:internal)
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8082/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - test-network
+
+  # Collector
+  collector:
+    build:
+      context: ../collector
+      dockerfile: Dockerfile
+    container_name: test-collector
+    environment:
+      COLLECTOR_MQ_BROKER_ADDR: "mq:8081"
+      COLLECTOR_DATABASE_URL: "postgres://postgres:postgres@postgres:5432/telemetry_test?sslmode=disable"
+      COLLECTOR_DB_ENABLED: "true"
+      COLLECTOR_TOPIC: "gpu-telemetry"
+      COLLECTOR_CONSUMER_GROUP: "telemetry-collectors"
+      COLLECTOR_CONSUMER_ID: "collector-1"
+      COLLECTOR_NUM_WORKERS: "3"
+      COLLECTOR_BATCH_SIZE: "10"
+      COLLECTOR_POLL_INTERVAL: "1s"
+      COLLECTOR_LOG_LEVEL: "debug"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mq:
+        condition: service_healthy
+    networks:
+      - test-network
+
+  # Gateway API
+  gateway:
+    build:
+      context: ../gateway
+      dockerfile: Dockerfile
+    container_name: test-gateway
+    environment:
+      GATEWAY_HTTP_PORT: "8080"
+      GATEWAY_DATABASE_URL: "postgres://postgres:postgres@postgres:5432/telemetry_test?sslmode=disable"
+      GATEWAY_LOG_LEVEL: "debug"
+    ports:
+      - "8085:8080"  # Different port
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - test-network
+
+  # Streamer (starts paused, triggered by tests)
+  streamer:
+    build:
+      context: ../streamer
+      dockerfile: Dockerfile
+    container_name: test-streamer
+    environment:
+      STREAMER_CSV_FILE_PATH: "/data/test_metrics.csv"
+      STREAMER_MQ_BROKER_ADDR: "mq:8081"
+      STREAMER_TOPIC: "gpu-telemetry"
+      STREAMER_STREAM_INTERVAL: "1s"
+      STREAMER_BATCH_SIZE: "10"
+      STREAMER_MQ_ENABLED: "true"
+      STREAMER_LOG_LEVEL: "debug"
+    volumes:
+      - ./testdata:/data:ro
+    depends_on:
+      mq:
+        condition: service_healthy
+    networks:
+      - test-network
+    # Start paused - tests will control when to stream
+    profiles:
+      - with-streamer
+
+networks:
+  test-network:
+    driver: bridge

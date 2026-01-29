@@ -11,6 +11,10 @@ GOBUILD := $(GO) build
 GOTEST := $(GO) test
 GOMOD := $(GO) mod
 
+# Container engine (prefer podman, fallback to docker)
+ENGINE := $(shell command -v podman 2>/dev/null || command -v docker 2>/dev/null)
+ENGINE_NAME := $(notdir $(ENGINE))
+
 # Proto
 PROTOC := protoc
 PROTO_DIR := proto
@@ -127,22 +131,38 @@ run-high: build
 	COLLECTOR_LOG_LEVEL=info \
 	./$(BIN_NAME)
 
-## docker: Build Docker image
+## docker: Build Docker image (uses podman or docker)
 docker:
-	@echo "Building Docker image..."
-	docker build -t $(DOCKER_IMAGE):$(DOCKER_TAG) .
+	@if [ -z "$(ENGINE)" ]; then \
+		echo "Error: No container engine found (docker or podman)"; \
+		exit 1; \
+	fi
+	@echo "Building Docker image using $(ENGINE_NAME)..."
+	$(ENGINE) build -t $(DOCKER_IMAGE):$(DOCKER_TAG) .
 
-## docker-run: Run Docker container with PostgreSQL
+## docker-run: Run Docker container with PostgreSQL (uses podman or docker)
 docker-run:
-	@echo "Running Docker container..."
-	docker run --rm -it \
+	@if [ -z "$(ENGINE)" ]; then \
+		echo "Error: No container engine found (docker or podman)"; \
+		exit 1; \
+	fi
+	@echo "Running container using $(ENGINE_NAME)..."
+	$(ENGINE) run --rm -it \
 		--network host \
 		-e COLLECTOR_MQ_BROKER_ADDR=localhost:8081 \
 		-e COLLECTOR_DB_ENABLED=true \
 		-e COLLECTOR_DATABASE_URL="postgres://postgres:postgres@localhost:5432/telemetry?sslmode=disable" \
 		$(DOCKER_IMAGE):$(DOCKER_TAG)
 
-## lint: Run linter
+## lint: Run golangci-lint
 lint:
-	@echo "Running linter..."
-	golangci-lint run ./...
+	@if command -v golangci-lint >/dev/null 2>&1; then \
+		echo "Running linter..."; \
+		golangci-lint run ./...; \
+	else \
+		echo "golangci-lint not found. Install with:"; \
+		echo "  brew install golangci-lint"; \
+		echo "  OR"; \
+		echo "  go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest"; \
+		exit 1; \
+	fi

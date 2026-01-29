@@ -15,6 +15,10 @@ GOVET=$(GOCMD) vet
 GOFMT=gofmt
 GOMOD=$(GOCMD) mod
 
+# Container engine (prefer podman, fallback to docker)
+ENGINE := $(shell command -v podman 2>/dev/null || command -v docker 2>/dev/null)
+ENGINE_NAME := $(notdir $(ENGINE))
+
 # Proto parameters
 PROTOC=protoc
 PROTO_DIR=proto
@@ -28,7 +32,7 @@ BIN_DIR=bin
 BIN_NAME=$(BIN_DIR)/$(SERVICE_NAME)
 
 # Docker
-DOCKER_IMAGE=local/$(SERVICE_NAME)
+DOCKER_IMAGE=mq-broker
 VERSION?=latest
 
 # Default target
@@ -122,15 +126,23 @@ run: build
 	MQ_MAX_QUEUE_SIZE=10000 \
 	./$(BIN_NAME)
 
-## docker: Build Docker image (includes proto generation)
+## docker: Build Docker image (uses podman or docker)
 docker:
-	@echo "Building Docker image..."
-	docker build -t $(DOCKER_IMAGE):$(VERSION) -t $(DOCKER_IMAGE):latest .
+	@if [ -z "$(ENGINE)" ]; then \
+		echo "Error: No container engine found (docker or podman)"; \
+		exit 1; \
+	fi
+	@echo "Building Docker image using $(ENGINE_NAME)..."
+	$(ENGINE) build -t $(DOCKER_IMAGE):$(VERSION) -t $(DOCKER_IMAGE):latest .
 
-## docker-run: Run Docker container
+## docker-run: Run Docker container (uses podman or docker)
 docker-run:
-	@echo "Running Docker container..."
-	docker run --rm -p 8081:8081 -p 8082:8082 $(DOCKER_IMAGE):latest
+	@if [ -z "$(ENGINE)" ]; then \
+		echo "Error: No container engine found (docker or podman)"; \
+		exit 1; \
+	fi
+	@echo "Running container using $(ENGINE_NAME)..."
+	$(ENGINE) run --rm -p 8081:8081 -p 8082:8082 $(DOCKER_IMAGE):latest
 
 ## clean: Clean build artifacts
 clean:
@@ -141,18 +153,11 @@ clean:
 
 ## help: Show this help message
 help:
-	@echo "MQ Broker - Available targets:"
+	@echo "MQ Broker Service"
 	@echo ""
-	@echo "  proto-install   Install protoc Go plugins (run once)"
-	@echo "  proto           Generate Go code from proto files"
-	@echo "  swagger         Generate Swagger/OpenAPI documentation"
-	@echo "  build           Build the broker binary"
-	@echo "  test            Run tests"
-	@echo "  test-cover      Run tests with coverage"
-	@echo "  fmt             Format code"
-	@echo "  vet             Run go vet"
-	@echo "  mod-tidy        Tidy go modules"
-	@echo "  run             Run locally"
-	@echo "  docker          Build Docker image"
-	@echo "  docker-run      Run Docker container"
-	@echo "  clean           Clean build artifacts"
+	@echo "Container Engine: $(ENGINE_NAME)"
+	@echo ""
+	@echo "Usage: make [target]"
+	@echo ""
+	@echo "Targets:"
+	@sed -n 's/^##//p' $(MAKEFILE_LIST) | column -t -s ':' | sed -e 's/^/ /'

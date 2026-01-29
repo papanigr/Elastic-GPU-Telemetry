@@ -114,35 +114,36 @@ collector/
 
 Default database URL: `postgres://postgres:postgres@localhost:5432/telemetry?sslmode=disable`
 
-## Prerequisites
+## Makefile Targets
 
-If modifying `.proto` files:
+Run `make help` to see all available targets.
+
+| Command | Description | Requirements |
+|---------|-------------|--------------|
+| `make help` | Show all available targets | - |
+| `make build` | Build the collector binary to `bin/collector` | - |
+| `make clean` | Remove binary, generated proto files, and coverage files | - |
+| `make test` | Run all unit tests | - |
+| `make test-cover` | Run tests with coverage (generates `coverage.html`) | - |
+| `make mod-tidy` | Tidy Go modules (`go mod tidy`) | Proto files must exist |
+| `make proto` | Generate Go code from `.proto` files | `protoc` installed |
+| `make proto-install` | Install protoc Go plugins | Go installed |
+| `make proto-check` | Check if proto files exist, generate if missing | - |
+| `make run` | Run with MQ + PostgreSQL (production mode) | MQ broker on `:8081` |
+| `make dry-run` | Run without DB (console output only) | MQ broker on `:8081` |
+| `make run-high` | Run with high throughput (batch=50, workers=5) | MQ broker on `:8081` |
+| `make docker` | Build Docker image (uses podman or docker) | Container runtime |
+| `make docker-run` | Run container with host network | Container runtime, MQ |
+| `make lint` | Run golangci-lint | `golangci-lint` installed |
+
+### Prerequisites
+
+If modifying `.proto` files, install protoc first:
 
 ```bash
-# Install protoc
-brew install protobuf
-
-# Install Go plugins
-make proto-install
-
-# Generate code
-make proto
-```
-
-## Build & Run
-
-```bash
-# Build
-make build
-
-# Run with MQ (requires MQ broker on localhost:8081)
-make run
-
-# Run in debug mode (more verbose, smaller batches)
-make dry-run
-
-# Run tests
-make test
+brew install protobuf    # Install protoc
+make proto-install       # Install Go plugins
+make proto               # Generate code
 ```
 
 ## Quick Start
@@ -180,14 +181,12 @@ INF Consumer statistics messages_consumed=100 batches_processed=10 messages_per_
 ## Docker
 
 ```bash
-# Build image
-make docker
+make docker      # Build image (uses podman or docker)
+make docker-run  # Run container with host network
 
-# Run container (connects to host network)
-make docker-run
-
-# Or with custom MQ address
-docker run --rm -it \
+# Or run manually with custom settings
+podman run --rm -it \
+  --network host \
   -e COLLECTOR_MQ_BROKER_ADDR=mq-broker:8081 \
   -e COLLECTOR_DB_ENABLED=false \
   telemetry-collector:latest
@@ -205,23 +204,6 @@ COLLECTOR_CONSUMER_ID=collector-3 make run &
 ```
 
 In Kubernetes, deploy multiple replicas - each pod automatically joins the consumer group.
-
-## Makefile Targets
-
-| Target | Description |
-|--------|-------------|
-| `build` | Build the binary |
-| `clean` | Remove binary and generated files |
-| `test` | Run tests |
-| `test-cover` | Run tests with coverage |
-| `proto` | Generate protobuf code |
-| `proto-install` | Install protoc plugins |
-| `run` | Run with MQ + PostgreSQL (production) |
-| `dry-run` | Run without DB (console output only) |
-| `run-high` | Run with high throughput + PostgreSQL |
-| `docker` | Build Docker image |
-| `docker-run` | Run Docker container |
-| `lint` | Run linter |
 
 ## Independence
 

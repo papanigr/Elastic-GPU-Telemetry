@@ -5,11 +5,17 @@ BIN_NAME := gateway
 DOCKER_IMAGE := gpu-telemetry-gateway
 DOCKER_TAG := latest
 
+# Container engine (prefer podman, fallback to docker)
+ENGINE := $(shell command -v podman 2>/dev/null || command -v docker 2>/dev/null)
+ENGINE_NAME := $(notdir $(ENGINE))
+
 .PHONY: help build clean test test-coverage run dry-run docker-build docker-run lint fmt tidy swagger
 
 ## help: Show this help message
 help:
-	@echo "API Gateway - $(SERVICE_NAME)"
+	@echo "API Gateway Service"
+	@echo ""
+	@echo "Container Engine: $(ENGINE_NAME)"
 	@echo ""
 	@echo "Usage: make [target]"
 	@echo ""
@@ -69,15 +75,23 @@ dry-run: build
 	GATEWAY_LOG_LEVEL=debug \
 	./bin/$(BIN_NAME)
 
-## docker-build: Build Docker image
+## docker-build: Build Docker image (uses podman or docker)
 docker-build:
-	@echo "Building Docker image..."
-	docker build -t $(DOCKER_IMAGE):$(DOCKER_TAG) .
+	@if [ -z "$(ENGINE)" ]; then \
+		echo "Error: No container engine found (docker or podman)"; \
+		exit 1; \
+	fi
+	@echo "Building Docker image using $(ENGINE_NAME)..."
+	$(ENGINE) build -t $(DOCKER_IMAGE):$(DOCKER_TAG) .
 
-## docker-run: Run Docker container
+## docker-run: Run Docker container (uses podman or docker)
 docker-run:
-	@echo "Running Docker container..."
-	docker run --rm -it \
+	@if [ -z "$(ENGINE)" ]; then \
+		echo "Error: No container engine found (docker or podman)"; \
+		exit 1; \
+	fi
+	@echo "Running container using $(ENGINE_NAME)..."
+	$(ENGINE) run --rm -it \
 		--network host \
 		-e GATEWAY_DATABASE_URL="postgres://postgres:postgres@localhost:5432/telemetry?sslmode=disable" \
 		$(DOCKER_IMAGE):$(DOCKER_TAG)

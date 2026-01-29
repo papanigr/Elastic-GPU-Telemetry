@@ -12,14 +12,15 @@
 # =============================================================================
 # If pkg/pb/*.pb.go files are committed, no proto generation needed.
 # If not, install protoc and generate them.
-FROM golang:1.22-alpine AS builder
+FROM golang:1.23-alpine AS builder
 
 # Install git and optionally protoc
 RUN apk add --no-cache git ca-certificates protobuf protobuf-dev
 
 # Install Go protoc plugins (only used if proto files need regeneration)
-RUN go install google.golang.org/protobuf/cmd/protoc-gen-go@latest && \
-    go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
+# Pin versions compatible with Go 1.23
+RUN go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.35.2 && \
+    go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.5.1
 
 WORKDIR /build
 
@@ -43,7 +44,8 @@ RUN if [ ! -f pkg/pb/mq.pb.go ]; then \
     fi
 
 # Build the binary
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+# Build for native architecture (supports both amd64 and arm64)
+RUN CGO_ENABLED=0 GOOS=linux \
     go build -ldflags="-w -s" -o streamer ./cmd
 
 # =============================================================================

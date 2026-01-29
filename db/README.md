@@ -113,41 +113,38 @@ db/
 └── README.md
 ```
 
-## Makefile Commands
+## Makefile Targets
 
-### Lifecycle
+Run `make help` to see all available targets. Uses podman or docker automatically.
 
-| Command | Description |
-|---------|-------------|
-| `make build` | Build the PostgreSQL container image |
-| `make up` | Start PostgreSQL container |
-| `make down` | Stop PostgreSQL container |
-| `make restart` | Restart PostgreSQL container |
-| `make wait` | Wait for PostgreSQL to be ready (for scripts) |
-| `make clean` | Remove container and ALL data |
-
-### Database Access
-
-| Command | Description |
-|---------|-------------|
-| `make psql` | Connect with psql client |
-| `make shell` | Open shell in container |
-| `make logs` | View PostgreSQL logs |
-| `make status` | Check container health |
-
-### Data Queries
-
-| Command | Description |
-|---------|-------------|
-| `make tables` | List database tables |
-| `make describe` | Describe gpu_telemetry table |
-| `make count` | Count total records |
-| `make sample` | Show 10 sample records |
-| `make rows` | Show 50 recent records |
-| `make tail` | Show 20 latest with all columns |
-| `make gpus` | List unique GPUs |
-| `make all` | Show ALL records (use with caution) |
-| `make export` | Export data to CSV file |
+| Command | Description | Requirements |
+|---------|-------------|--------------|
+| `make help` | Show all available targets | - |
+| `make check-engine` | Verify container engine is available | - |
+| **Lifecycle** | | |
+| `make build` | Build the PostgreSQL container image | Container runtime |
+| `make up` | Start PostgreSQL container | Container runtime |
+| `make down` | Stop PostgreSQL container | Container running |
+| `make restart` | Restart PostgreSQL container | Container exists |
+| `make wait` | Wait for PostgreSQL to be ready (for scripts) | Container running |
+| `make clean` | Remove container and ALL data (with confirmation) | Container runtime |
+| **Database Access** | | |
+| `make psql` | Connect with psql client | Container running |
+| `make shell` | Open shell in container | Container running |
+| `make logs` | View PostgreSQL logs (follow mode) | Container running |
+| `make status` | Check container health and status | Container runtime |
+| **Schema** | | |
+| `make migrate` | Run migrations manually | Container running |
+| `make tables` | List database tables | Container running |
+| `make describe` | Describe gpu_telemetry table schema | Container running |
+| **Data Queries** | | |
+| `make count` | Count total records in gpu_telemetry | Container running |
+| `make sample` | Show 10 sample records | Container running |
+| `make rows` | Show 50 recent records | Container running |
+| `make tail` | Show 20 latest with all columns | Container running |
+| `make gpus` | List unique GPUs | Container running |
+| `make all` | Show ALL records (use with caution) | Container running |
+| `make export` | Export data to CSV file | Container running |
 
 ## Kubernetes Deployment
 

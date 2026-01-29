@@ -4,7 +4,7 @@
 # =============================================================================
 # Stage 1: Builder
 # =============================================================================
-FROM golang:1.21-alpine AS builder
+FROM golang:1.23-alpine AS builder
 
 # Install build dependencies
 RUN apk add --no-cache git make
@@ -23,8 +23,8 @@ COPY pkg/ pkg/
 RUN if [ ! -f pkg/pb/mq.pb.go ]; then \
         echo "Proto files not found, installing protoc..."; \
         apk add --no-cache protobuf protobuf-dev; \
-        go install google.golang.org/protobuf/cmd/protoc-gen-go@latest; \
-        go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest; \
+        go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.35.2; \
+        go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.5.1; \
         mkdir -p pkg/pb; \
         protoc --go_out=pkg/pb --go_opt=paths=source_relative \
                --go-grpc_out=pkg/pb --go-grpc_opt=paths=source_relative \
@@ -38,7 +38,8 @@ COPY cmd/ cmd/
 COPY internal/ internal/
 
 # Build the binary
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+# Build for native architecture (supports both amd64 and arm64)
+RUN CGO_ENABLED=0 GOOS=linux go build \
     -ldflags="-w -s" \
     -o /app/collector ./cmd
 

@@ -103,57 +103,67 @@ mq/
 | `MQ_CLEANUP_INTERVAL` | `10s` | Cleanup routine interval |
 | `MQ_LOG_LEVEL` | `info` | Log level |
 
-## API Endpoints
+## REST API Reference
 
-### Documentation (Auto-Generated)
+All HTTP endpoints are served on port **8082** by default.
 
-| Endpoint | Description |
-|----------|-------------|
-| `/swagger/index.html` | Swagger UI (interactive docs) |
-| `/swagger/doc.json` | OpenAPI spec (JSON) |
-| `/health` | Health check |
+### Core Endpoints
+
+| Method | Endpoint | Description | Example |
+|--------|----------|-------------|---------|
+| GET | `/health` | Health check | `curl http://localhost:8082/health` |
+| GET | `/swagger/index.html` | Swagger UI (interactive docs) | Open in browser |
+| GET | `/swagger/doc.json` | OpenAPI spec (JSON) | `curl http://localhost:8082/swagger/doc.json` |
 
 ### Message Operations
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/v1/topics/{topic}/messages` | POST | Publish a message |
-| `/api/v1/topics/{topic}/messages` | GET | Consume messages |
-| `/api/v1/topics/{topic}/subscribe` | POST | Subscribe to topic |
-| `/api/v1/topics/{topic}/ack` | POST | Acknowledge messages |
+| Method | Endpoint | Description | Example |
+|--------|----------|-------------|---------|
+| POST | `/api/v1/topics/{topic}/messages` | Publish a message | `curl -X POST http://localhost:8082/api/v1/topics/gpu-telemetry/messages -H "Content-Type: application/json" -d '{"payload": {"metric": "gpu_util", "value": 85}}'` |
+| GET | `/api/v1/topics/{topic}/messages` | Consume messages | `curl "http://localhost:8082/api/v1/topics/gpu-telemetry/messages?consumer_id=c1&group=g1&max_messages=10"` |
+| POST | `/api/v1/topics/{topic}/subscribe` | Subscribe consumer to topic | `curl -X POST http://localhost:8082/api/v1/topics/gpu-telemetry/subscribe -H "Content-Type: application/json" -d '{"consumer_id": "c1", "group": "g1"}'` |
+| POST | `/api/v1/topics/{topic}/ack` | Acknowledge messages | `curl -X POST http://localhost:8082/api/v1/topics/gpu-telemetry/ack -H "Content-Type: application/json" -d '{"consumer_id": "c1", "message_ids": ["msg-id-1"]}'` |
 
 ### Admin Operations
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/admin/topics` | GET | List all topics |
-| `/admin/topics/{topic}/stats` | GET | Get topic statistics |
-| `/admin/topics/{topic}/messages` | GET | View messages |
-| `/admin/topics/{topic}/messages` | DELETE | Purge all messages |
-| `/admin/topics/{topic}/messages/{id}` | DELETE | Delete specific message |
-| `/admin/topics/{topic}/consumers` | GET | List consumers |
+| Method | Endpoint | Description | Example |
+|--------|----------|-------------|---------|
+| GET | `/admin/topics` | List all topics | `curl http://localhost:8082/admin/topics` |
+| GET | `/admin/topics/{topic}/stats` | Get topic statistics | `curl http://localhost:8082/admin/topics/gpu-telemetry/stats` |
+| GET | `/admin/topics/{topic}/messages` | View messages in topic | `curl "http://localhost:8082/admin/topics/gpu-telemetry/messages?limit=10"` |
+| DELETE | `/admin/topics/{topic}/messages` | Purge all messages in topic | `curl -X DELETE http://localhost:8082/admin/topics/gpu-telemetry/messages` |
+| DELETE | `/admin/topics/{topic}/messages/{id}` | Delete specific message | `curl -X DELETE http://localhost:8082/admin/topics/gpu-telemetry/messages/msg-id-1` |
+| GET | `/admin/topics/{topic}/consumers` | List consumers for topic | `curl http://localhost:8082/admin/topics/gpu-telemetry/consumers` |
 
-## Build & Run
+## Makefile Targets
 
-```bash
-# Generate Swagger docs (auto-generated OpenAPI)
-make swagger
+Run `make help` to see all available targets. Uses podman or docker automatically.
 
-# Build (includes swagger generation)
-make build
-
-# Run locally
-make run
-
-# Run tests
-make test
-
-# Build Docker image
-make docker
-
-# Run in Docker
-make docker-run
-```
+| Command | Description | Requirements |
+|---------|-------------|--------------|
+| `make help` | Show all available targets | - |
+| **Build** | | |
+| `make build` | Build the MQ broker binary (generates swagger first) | - |
+| `make clean` | Remove binary, proto files, and coverage files | - |
+| `make all` | Run proto, fmt, vet, test, and build | - |
+| **Testing** | | |
+| `make test` | Run all unit tests | - |
+| `make test-cover` | Run tests with coverage (generates `coverage.html`) | - |
+| **Code Quality** | | |
+| `make fmt` | Format code with gofmt | - |
+| `make vet` | Run go vet | - |
+| `make mod-tidy` | Tidy Go modules (`go mod tidy`) | - |
+| **Proto** | | |
+| `make proto` | Generate Go code from `.proto` files | `protoc` installed |
+| `make proto-install` | Install protoc Go plugins | Go installed |
+| `make proto-check` | Check if proto files exist, generate if missing | - |
+| **Swagger** | | |
+| `make swagger` | Generate OpenAPI spec (auto-generated from annotations) | - |
+| **Run** | | |
+| `make run` | Run MQ broker locally (gRPC:8081, HTTP:8082) | - |
+| **Docker** | | |
+| `make docker` | Build Docker image (uses podman or docker) | Container runtime |
+| `make docker-run` | Run container exposing ports 8081 and 8082 | Container runtime |
 
 ## Auto-Generated OpenAPI
 
@@ -167,52 +177,3 @@ Regenerate after code changes:
 make swagger
 ```
 
-## Example Usage
-
-**Note:** HTTP admin APIs are on port **8082**. gRPC (for streamer/collector) is on port **8081**.
-
-### Publish a message (via HTTP - for testing)
-```bash
-curl -X POST http://localhost:8082/api/v1/topics/gpu-telemetry/messages \
-  -H "Content-Type: application/json" \
-  -d '{"payload": {"metric": "gpu_util", "value": 85}}'
-```
-
-### Subscribe a consumer
-```bash
-curl -X POST http://localhost:8082/api/v1/topics/gpu-telemetry/subscribe \
-  -H "Content-Type: application/json" \
-  -d '{"consumer_id": "collector-1", "group": "collectors"}'
-```
-
-### Consume messages
-```bash
-curl "http://localhost:8082/api/v1/topics/gpu-telemetry/messages?consumer_id=collector-1&group=collectors&max_messages=10"
-```
-
-### Acknowledge messages
-```bash
-curl -X POST http://localhost:8082/api/v1/topics/gpu-telemetry/ack \
-  -H "Content-Type: application/json" \
-  -d '{"consumer_id": "collector-1", "message_ids": ["msg-id-1", "msg-id-2"]}'
-```
-
-### View topic stats (Admin)
-```bash
-curl http://localhost:8082/admin/topics/gpu-telemetry/stats
-```
-
-### View messages (Admin)
-```bash
-curl "http://localhost:8082/admin/topics/gpu-telemetry/messages?limit=10"
-```
-
-### Delete a message (Admin)
-```bash
-curl -X DELETE http://localhost:8082/admin/topics/gpu-telemetry/messages/msg-id-1
-```
-
-### Purge all messages (Admin)
-```bash
-curl -X DELETE http://localhost:8082/admin/topics/gpu-telemetry/messages
-```

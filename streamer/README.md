@@ -171,15 +171,31 @@ When deployed to Kubernetes, multiple instances can run simultaneously:
 
 ## Makefile Targets
 
-| Target | Description |
-|--------|-------------|
-| `proto-install` | Install protoc Go plugins (run once) |
-| `proto` | Generate Go code from proto files |
-| `build` | Build the streamer binary |
-| `test` | Run tests |
-| `test-cover` | Run tests with coverage |
-| `run` | Run locally with MQ (gRPC) |
-| `dry-run` | Run locally without MQ (console only) |
-| `docker` | Build Docker image |
-| `docker-run` | Run Docker container |
-| `clean` | Clean build artifacts |
+Run `make help` to see all available targets. Uses podman or docker automatically.
+
+| Command | Description | Requirements |
+|---------|-------------|--------------|
+| `make help` | Show all available targets | - |
+| **Build** | | |
+| `make build` | Build the streamer binary to `bin/streamer` | - |
+| `make clean` | Remove binary, proto files, and coverage files | - |
+| `make all` | Run proto, fmt, vet, test, and build | - |
+| **Testing** | | |
+| `make test` | Run all unit tests | - |
+| `make test-cover` | Run tests with coverage (generates `coverage.html`) | - |
+| `make test-cover-report` | Show coverage percentage | - |
+| **Code Quality** | | |
+| `make fmt` | Format code with gofmt | - |
+| `make vet` | Run go vet | - |
+| `make mod-tidy` | Tidy Go modules (`go mod tidy`) | - |
+| **Proto** | | |
+| `make proto` | Generate Go code from `.proto` files | `protoc` installed |
+| `make proto-install` | Install protoc Go plugins | Go installed |
+| `make proto-check` | Check if proto files exist, generate if missing | - |
+| **Run** | | |
+| `make run` | Run with MQ enabled (10 records/5s via gRPC) | MQ broker on `:8081` |
+| `make dry-run` | Run without MQ (console output only) | - |
+| `make run-single` | Run sending 1 record/second (debug mode) | - |
+| **Docker** | | |
+| `make docker` | Build Docker image (uses podman or docker) | Container runtime |
+| `make docker-run` | Run container with data volume | Container runtime |

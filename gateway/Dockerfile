@@ -1,11 +1,12 @@
 # Build stage
-FROM golang:1.21-alpine AS builder
+FROM golang:1.23-alpine AS builder
 
 # Install build dependencies
 RUN apk add --no-cache git
 
 # Install swag for OpenAPI generation
-RUN go install github.com/swaggo/swag/cmd/swag@latest
+# Pin version compatible with Go 1.23
+RUN go install github.com/swaggo/swag/cmd/swag@v1.16.4
 
 # Set working directory
 WORKDIR /app

@@ -10,35 +10,45 @@ The API Gateway provides REST endpoints for:
 - Filtering telemetry by time range
 - Pagination support for large datasets
 
-## API Endpoints
+## REST API Reference
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/health` | Health check |
-| GET | `/api/v1/gpus` | List all GPUs |
-| GET | `/api/v1/gpus/{id}/telemetry` | Get all telemetry for a GPU |
-| GET | `/api/v1/gpus/{id}/telemetry?start_time=...&end_time=...` | Get telemetry with time filter |
-| GET | `/swagger/index.html` | Swagger UI (interactive docs) |
-| GET | `/swagger/doc.json` | OpenAPI spec (JSON) |
+All HTTP endpoints are served on port **8080** by default.
+
+### Core Endpoints
+
+| Method | Endpoint | Description | Example |
+|--------|----------|-------------|---------|
+| GET | `/health` | Health check | `curl http://localhost:8080/health` |
+| GET | `/swagger/index.html` | Swagger UI (interactive docs) | Open in browser |
+| GET | `/swagger/doc.json` | OpenAPI spec (JSON) | `curl http://localhost:8080/swagger/doc.json` |
+
+### GPU & Telemetry Endpoints
+
+| Method | Endpoint | Description | Example |
+|--------|----------|-------------|---------|
+| GET | `/api/v1/gpus` | List all unique GPUs | `curl http://localhost:8080/api/v1/gpus` |
+| GET | `/api/v1/gpus/{id}/telemetry` | Get all telemetry for a GPU | `curl http://localhost:8080/api/v1/gpus/GPU-xxx/telemetry` |
+| GET | `/api/v1/gpus/{id}/telemetry?start_time=...&end_time=...` | Get telemetry with time filter | `curl "http://localhost:8080/api/v1/gpus/GPU-xxx/telemetry?start_time=2026-01-28&end_time=2026-01-29"` |
+| GET | `/api/v1/gpus/{id}/telemetry?limit=...&offset=...` | Get telemetry with pagination | `curl "http://localhost:8080/api/v1/gpus/GPU-xxx/telemetry?limit=50&offset=0"` |
 
 ### Query Parameters for Telemetry
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `start_time` | string | Start time filter (inclusive) |
-| `end_time` | string | End time filter (inclusive) |
-| `limit` | int | Max records (default 100, max 1000) |
-| `offset` | int | Skip records (for pagination) |
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `start_time` | string | - | Start time filter (inclusive) |
+| `end_time` | string | - | End time filter (inclusive) |
+| `limit` | int | 100 | Max records to return (max 1000) |
+| `offset` | int | 0 | Number of records to skip (for pagination) |
 
 ### Supported Time Formats
 
-```
-Simple:      2026-01-28T15:30:00     ← Recommended (no timezone needed)
-Date only:   2026-01-28              ← For full day queries
-RFC3339:     2026-01-28T15:30:00Z    ← With UTC timezone
-With offset: 2026-01-28T15:30:00+05:30
-Unix:        1706454600              ← Unix timestamp (seconds)
-```
+| Format | Example | Description |
+|--------|---------|-------------|
+| Simple | `2026-01-28T15:30:00` | Recommended (no timezone needed) |
+| Date only | `2026-01-28` | For full day queries |
+| RFC3339 | `2026-01-28T15:30:00Z` | With UTC timezone |
+| With offset | `2026-01-28T15:30:00+05:30` | With timezone offset |
+| Unix | `1706454600` | Unix timestamp (seconds) |
 
 ## Quick Start
 
@@ -58,30 +68,6 @@ cd ../gateway
 make run
 ```
 
-### Test Endpoints
-
-```bash
-# Health check
-curl http://localhost:8080/health
-
-# List GPUs
-curl http://localhost:8080/api/v1/gpus
-
-# Get telemetry for a GPU
-curl http://localhost:8080/api/v1/gpus/GPU-5fd4f087-86f3-7a43-b711-4771313afc50/telemetry
-
-# With time filter (simple format - no Z needed)
-curl "http://localhost:8080/api/v1/gpus/GPU-5fd4f087-86f3-7a43-b711-4771313afc50/telemetry?start_time=2026-01-28T00:00:00&end_time=2026-01-28T23:59:59"
-
-# Or just use date (gets full day)
-curl "http://localhost:8080/api/v1/gpus/GPU-5fd4f087-86f3-7a43-b711-4771313afc50/telemetry?start_time=2026-01-28&end_time=2026-01-28"
-
-# With pagination
-curl "http://localhost:8080/api/v1/gpus/GPU-5fd4f087-86f3-7a43-b711-4771313afc50/telemetry?limit=50&offset=0"
-
-# OpenAPI spec
-curl http://localhost:8080/openapi.yaml
-```
 
 ## Configuration
 
@@ -148,20 +134,32 @@ gateway/
 └── README.md
 ```
 
-## Makefile Commands
+## Makefile Targets
 
-| Command | Description |
-|---------|-------------|
-| `make swagger` | Generate OpenAPI spec (auto-generated) |
-| `make build` | Generate swagger + build binary |
-| `make run` | Run with PostgreSQL connection |
-| `make test` | Run unit tests |
-| `make test-coverage` | Run tests with coverage report |
-| `make docker-build` | Build Docker image |
-| `make docker-run` | Run Docker container |
-| `make lint` | Run linter |
-| `make fmt` | Format code |
-| `make verify` | Run all checks |
+Run `make help` to see all available targets. Uses podman or docker automatically.
+
+| Command | Description | Requirements |
+|---------|-------------|--------------|
+| `make help` | Show all available targets | - |
+| **Build** | | |
+| `make build` | Build the gateway binary (generates swagger first) | - |
+| `make clean` | Remove binary and coverage files | - |
+| **Testing** | | |
+| `make test` | Run all unit tests | - |
+| `make test-coverage` | Run tests with coverage (generates `coverage.html`) | - |
+| **Code Quality** | | |
+| `make fmt` | Format code with go fmt | - |
+| `make lint` | Run golangci-lint (falls back to go vet) | - |
+| `make tidy` | Tidy and verify dependencies | - |
+| `make verify` | Run all checks (fmt, lint, test) | - |
+| **Swagger** | | |
+| `make swagger` | Generate OpenAPI spec (auto-generated from annotations) | - |
+| **Run** | | |
+| `make run` | Run gateway with PostgreSQL connection | PostgreSQL on :5432 |
+| `make dry-run` | Run without database (shows startup logs) | - |
+| **Docker** | | |
+| `make docker-build` | Build Docker image (uses podman or docker) | Container runtime |
+| `make docker-run` | Run container with host network | Container runtime |
 
 ## Architecture
 
