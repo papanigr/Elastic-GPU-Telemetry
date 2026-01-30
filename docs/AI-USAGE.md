@@ -150,7 +150,9 @@ if !msg.IsDLQ && now.Sub(msg.Timestamp) > maxAge {
 - Added batch database inserts for efficiency
 - Implemented NACK on failure (triggers DLQ flow)
 
-**Manual Intervention**: None - worked as expected.
+**Manual Intervention**: 
+- Suggested increasing worker pool from 1 to 3 goroutines for concurrent processing
+- This allows 3 workers to write to the database simultaneously, improving throughput
 
 ---
 

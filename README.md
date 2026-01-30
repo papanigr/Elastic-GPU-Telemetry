@@ -300,6 +300,14 @@ make down
 | `make coverage` | Generate coverage reports |
 | `make logs` | View service logs |
 | `make down` | Teardown everything |
+| **Database Inspection** | |
+| `make db-shell` | Open interactive PostgreSQL shell |
+| `make db-count` | Show record counts in tables |
+| `make db-gpus` | List all unique GPUs |
+| `make db-telemetry` | Show recent telemetry records |
+| `make db-stats` | Show database statistics |
+| `make db-metrics` | Show records by metric type |
+| `make db-all` | Display all records (default: 50, use `LIMIT=N`) |
 
 ### What to Evaluate
 
@@ -397,6 +405,11 @@ This will:
 5. Deploy via Helm
 6. Wait for pods to be ready
 
+**Cleanup:**
+```bash
+make down
+```
+
 ### Option 2: Step-by-Step
 
 ```bash
@@ -419,12 +432,22 @@ make deploy
 make status
 ```
 
+**Cleanup:**
+```bash
+make down
+```
+
 ### Option 3: Use Pre-built DockerHub Images
 
 ```bash
 # Create cluster and deploy using pre-built images from DockerHub
 make cluster-create
 make deploy DOCKER_REGISTRY=pp010 IMAGE_TAG=latest
+```
+
+**Cleanup:**
+```bash
+make down
 ```
 
 ### Option 4: Deploy Without Source Code (Production)
@@ -459,6 +482,21 @@ kubectl port-forward svc/gateway 8080:8080 -n gpu-telemetry
 curl http://localhost:8080/health
 ```
 
+**Cleanup:**
+```bash
+# Stop port-forward (Ctrl+C or kill background process)
+pkill -f "kubectl port-forward.*gpu-telemetry"
+
+# Uninstall Helm release
+helm uninstall telemetry --namespace gpu-telemetry
+
+# Delete namespace
+kubectl delete namespace gpu-telemetry
+
+# Delete Kind cluster (if using Kind)
+kind delete cluster --name gpu-telemetry
+```
+
 **What you need to distribute:**
 | Asset | Required | Purpose |
 |-------|----------|---------|
@@ -486,6 +524,8 @@ make docker-push       # Push Docker images only
 make helm-push-oci     # Push Helm chart to OCI registry only
 make helm-package      # Package chart locally (dist/gpu-telemetry-1.0.0.tgz)
 ```
+
+---
 
 ## Usage
 

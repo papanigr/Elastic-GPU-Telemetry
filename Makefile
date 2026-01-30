@@ -397,6 +397,56 @@ swagger: ## Generate OpenAPI specs for all services
 	@echo "OpenAPI specs generated!"
 
 # ============================================================================
+# DATABASE INSPECTION
+# ============================================================================
+
+.PHONY: db-shell
+db-shell: ## Open interactive PostgreSQL shell
+	@echo "Connecting to PostgreSQL (password: postgres)..."
+	@kubectl exec -it postgres-0 -n $(NAMESPACE) -- psql -U postgres -d telemetry
+
+.PHONY: db-count
+db-count: ## Show record counts in database
+	@echo "=== Database Record Counts ==="
+	@kubectl exec -it postgres-0 -n $(NAMESPACE) -- psql -U postgres -d telemetry -c \
+		"SELECT 'gpu_telemetry' as table_name, COUNT(*) as records FROM gpu_telemetry UNION ALL SELECT 'gpus (view)', COUNT(*) FROM gpus;"
+
+.PHONY: db-gpus
+db-gpus: ## List all unique GPUs in database
+	@echo "=== Unique GPUs ==="
+	@kubectl exec -it postgres-0 -n $(NAMESPACE) -- psql -U postgres -d telemetry -c \
+		"SELECT uuid, gpu_index, device, model_name, hostname, last_seen FROM gpus ORDER BY last_seen DESC LIMIT 20;"
+
+.PHONY: db-telemetry
+db-telemetry: ## Show recent telemetry records
+	@echo "=== Recent Telemetry (last 10 records) ==="
+	@kubectl exec -it postgres-0 -n $(NAMESPACE) -- psql -U postgres -d telemetry -c \
+		"SELECT uuid, metric_name, value, timestamp FROM gpu_telemetry ORDER BY timestamp DESC LIMIT 10;"
+
+.PHONY: db-stats
+db-stats: ## Show database statistics
+	@echo "=== Database Statistics ==="
+	@kubectl exec -it postgres-0 -n $(NAMESPACE) -- psql -U postgres -d telemetry -c \
+		"SELECT \
+			(SELECT COUNT(*) FROM gpu_telemetry) as total_records, \
+			(SELECT COUNT(DISTINCT uuid) FROM gpu_telemetry) as unique_gpus, \
+			(SELECT COUNT(DISTINCT metric_name) FROM gpu_telemetry) as metric_types, \
+			(SELECT MIN(timestamp) FROM gpu_telemetry) as oldest_record, \
+			(SELECT MAX(timestamp) FROM gpu_telemetry) as newest_record;"
+
+.PHONY: db-metrics
+db-metrics: ## Show telemetry count by metric type
+	@echo "=== Records by Metric Type ==="
+	@kubectl exec -it postgres-0 -n $(NAMESPACE) -- psql -U postgres -d telemetry -c \
+		"SELECT metric_name, COUNT(*) as count FROM gpu_telemetry GROUP BY metric_name ORDER BY count DESC LIMIT 15;"
+
+.PHONY: db-all
+db-all: ## Display all telemetry records in tabular format (usage: make db-all LIMIT=100)
+	@echo "=== All Telemetry Records ==="
+	@kubectl exec -it postgres-0 -n $(NAMESPACE) -- psql -U postgres -d telemetry -c \
+		"SELECT id, uuid, gpu_index, device, model_name, hostname, metric_name, value, timestamp FROM gpu_telemetry ORDER BY timestamp DESC LIMIT $(or $(LIMIT),50);"
+
+# ============================================================================
 # HELM CHART PACKAGING & PUBLISHING
 # ============================================================================
 
