@@ -694,60 +694,113 @@ make coverage
 
 ```
 Elastic-GPU-Telemetry/
-├── Makefile                 # Root orchestration
+├── .gitignore               # Git ignore patterns
+├── Makefile                 # Root orchestration (make up/down/status/db-*)
 ├── README.md                # This file
+├── LICENSE                  # MIT License
 ├── kind-config.yaml         # Kind cluster config
+│
 ├── helm/
 │   └── gpu-telemetry/       # Helm umbrella chart
 │       ├── Chart.yaml
-│       ├── values.yaml
+│       ├── values.yaml      # Default configuration (credentials, replicas, etc.)
 │       └── templates/
+│           ├── _helpers.tpl           # Template helpers (postgresUrl, labels)
+│           ├── configmap.yaml         # Non-sensitive configuration
+│           ├── secret.yaml            # Sensitive data (POSTGRES_PASSWORD, DATABASE_URL)
 │           ├── mq-deployment.yaml
+│           ├── mq-service.yaml
 │           ├── streamer-deployment.yaml
 │           ├── collector-deployment.yaml
 │           ├── gateway-deployment.yaml
+│           ├── gateway-service.yaml
 │           ├── postgres-statefulset.yaml
-│           └── kyverno-policies.yaml
+│           ├── postgres-service.yaml
+│           └── kyverno-policies.yaml  # Admission controller policies
+│
 ├── mq/                      # Custom Message Queue
 │   ├── cmd/main.go
+│   ├── go.mod, go.sum
 │   ├── internal/
-│   │   ├── api/             # HTTP admin handlers
-│   │   ├── broker/          # Core broker + DLQ logic
-│   │   ├── config/
+│   │   ├── api/             # HTTP admin handlers + tests
+│   │   ├── broker/          # Core broker + DLQ logic + tests
+│   │   ├── config/          # Configuration + tests
 │   │   └── grpc/            # gRPC server
-│   ├── docs/                # Auto-generated OpenAPI
+│   ├── pkg/
+│   │   ├── models/          # Message models + tests
+│   │   └── pb/              # Generated protobuf (mq.pb.go, mq_grpc.pb.go)
+│   ├── proto/mq.proto       # gRPC service definition
+│   ├── docs/                # Auto-generated OpenAPI (swagger.json, swagger.yaml)
 │   ├── Makefile
 │   ├── Dockerfile
 │   └── README.md
+│
 ├── streamer/                # Telemetry Streamer
 │   ├── cmd/main.go
-│   ├── internal/
+│   ├── go.mod, go.sum
+│   ├── internal/            # Config, CSV reader, streamer + tests
+│   ├── pkg/
+│   │   ├── models/          # Telemetry models
+│   │   ├── mq/client/       # MQ client (HTTP + gRPC)
+│   │   └── pb/              # Generated protobuf
+│   ├── proto/mq.proto
 │   ├── data/dcgm_metrics.csv
 │   ├── Makefile
 │   ├── Dockerfile
 │   └── README.md
+│
 ├── collector/               # Telemetry Collector
 │   ├── cmd/main.go
+│   ├── go.mod, go.sum
 │   ├── internal/
+│   │   ├── config/          # Configuration + tests
+│   │   ├── consumer/        # MQ consumer
+│   │   ├── models/          # Telemetry models + tests
+│   │   ├── repository/      # PostgreSQL repository + tests
+│   │   └── worker/          # Worker pool + tests
+│   ├── pkg/pb/              # Generated protobuf
+│   ├── proto/mq.proto
 │   ├── Makefile
 │   ├── Dockerfile
 │   └── README.md
+│
 ├── gateway/                 # API Gateway
 │   ├── cmd/main.go
+│   ├── go.mod, go.sum
 │   ├── internal/
-│   ├── docs/                # Auto-generated OpenAPI
+│   │   ├── config/          # Configuration + tests
+│   │   ├── handlers/        # HTTP handlers + tests
+│   │   ├── models/          # Response models + tests
+│   │   ├── repository/      # PostgreSQL repository + tests
+│   │   └── router/          # Chi router + tests
+│   ├── docs/                # Auto-generated OpenAPI (swagger.json, swagger.yaml)
 │   ├── Makefile
 │   ├── Dockerfile
 │   └── README.md
+│
 ├── db/                      # PostgreSQL
+│   ├── init/init.sql        # Initial schema setup
 │   ├── migrations/
+│   │   ├── 001_create_gpu_telemetry.sql
+│   │   └── 002_create_gpus_view.sql
+│   ├── docker-compose.yml   # Local development
 │   ├── Makefile
 │   ├── Dockerfile
 │   └── README.md
+│
 ├── tests/                   # Integration tests
+│   ├── go.mod, go.sum
 │   ├── integration/
+│   │   ├── setup_test.go    # Test environment setup
+│   │   ├── api_test.go      # Gateway API tests
+│   │   ├── mq_test.go       # MQ tests
+│   │   ├── e2e_flow_test.go # End-to-end flow tests
+│   │   └── scaling_test.go  # Scaling tests
+│   ├── testdata/test_metrics.csv
+│   ├── docker-compose.test.yml
 │   ├── Makefile
 │   └── README.md
+│
 └── docs/
     ├── DESIGN.md            # System design document
     └── AI-USAGE.md          # AI assistance documentation
