@@ -184,7 +184,7 @@ MQ Ports:
 │                                                                 │
 │  Configuration:                                                 │
 │  - CSV_FILE_PATH: /data/metrics.csv                            │
-│  - MQ_BROKER_URL: http://mq-broker:8080                        │
+│  - MQ_BROKER_ADDR: mq-broker:8081 (gRPC)                       │
 │  - TOPIC: gpu-telemetry                                        │
 │  - STREAM_INTERVAL: 100ms                                      │
 │  - BATCH_SIZE: 10                                              │
@@ -249,7 +249,7 @@ func (s *Streamer) Run(ctx context.Context) error {
 │  └─────────────────┘    └─────────────┘    └─────────────────┘ │
 │                                                                 │
 │  Configuration:                                                 │
-│  - MQ_BROKER_URL: http://mq-broker:8080                        │
+│  - MQ_BROKER_ADDR: mq-broker:8081 (gRPC)                       │
 │  - TOPIC: gpu-telemetry                                        │
 │  - CONSUMER_GROUP: collectors                                  │
 │  - DB_CONNECTION_STRING: postgres://...                        │
@@ -1485,9 +1485,9 @@ For fixed-schema, time-series GPU telemetry with range queries and a limit of 10
 |-----------|--------|-------------|---------|
 | Database | PostgreSQL | SQLite | Need proper concurrent write access |
 | Database | PostgreSQL | MongoDB | Fixed schema, time-range queries favor SQL |
-| MQ Protocol | HTTP | TCP/gRPC | HTTP simpler to implement & debug |
-| MQ Protocol | HTTP | WebSocket | Long-polling sufficient for this scale |
-| Message Format | JSON | Protobuf | JSON easier to debug, performance not critical |
+| MQ Protocol | gRPC (8081) | HTTP only | gRPC provides efficient binary protocol, type-safety via protobuf |
+| MQ Admin API | HTTP (8082) | gRPC only | HTTP easier for debugging, Swagger UI, curl testing |
+| Message Format | Protobuf (gRPC) + JSON (Admin) | JSON only | Protobuf for efficiency, JSON for admin readability |
 | HTTP Framework | chi | gin | chi is more lightweight and idiomatic |
 
 ---
