@@ -20,7 +20,7 @@ endif
 ENGINE := $(notdir $(CONTAINER_ENGINE))
 
 # ============================================================================
-# QUICK START (for interviewer)
+# QUICK START
 # ============================================================================
 
 .PHONY: up
@@ -620,7 +620,7 @@ help: ## Show this help
 	@echo "GPU Telemetry Pipeline"
 	@echo "======================"
 	@echo ""
-	@echo "Quick Start (for evaluators):"
+	@echo "Quick Start:"
 	@echo "  make up       - Create cluster, build images, deploy everything"
 	@echo "  make demo     - Port-forward Gateway and show sample commands"
 	@echo "  make down     - Teardown everything"

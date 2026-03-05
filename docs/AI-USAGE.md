@@ -417,7 +417,7 @@ helm install telemetry oci://registry-1.docker.io/pp010/gpu-telemetry \
 **AI Fix**: Changed project structure directory name to `Elastic-GPU-Telemetry/` to match actual repository.
 
 **Prompt 5**:
-> "Along with the make commands, all APIs should be also there in README under For Evaluators / Interviewers."
+> "Along with the make commands, all APIs should be also there in the README Deployment Guide."
 
 **AI Contribution**:
 - Added comprehensive Gateway REST API reference table
@@ -433,11 +433,11 @@ helm install telemetry oci://registry-1.docker.io/pp010/gpu-telemetry \
 ### README Creation
 
 **Prompt**:
-> "Create a root README with all deployment details for interviewers."
+> "Create a comprehensive root README with all deployment details."
 
 **AI Contribution**:
 - Comprehensive quick start guide
-- Step-by-step evaluation instructions
+- Step-by-step deployment instructions
 - Architecture diagrams
 - API documentation
 - Troubleshooting guide

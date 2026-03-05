@@ -2,6 +2,8 @@
 
 An elastic, scalable telemetry pipeline for AI clusters with a custom message queue implementation.
 
+Built from the problem statement defined in [`GPU Telemetry Pipeline Message Queue.pdf`](GPU%20Telemetry%20Pipeline%20Message%20Queue.pdf).
+
 ## Quick Start
 
 ```bash
@@ -23,9 +25,9 @@ make down
 
 ---
 
-## For Evaluators / Interviewers
+## Deployment Guide
 
-This section provides a complete walkthrough to evaluate the project.
+This section provides a complete deployment walkthrough.
 
 ### Step 1: Prerequisites
 
@@ -309,10 +311,10 @@ make down
 | `make db-metrics` | Show records by metric type |
 | `make db-all` | Display all records (default: 50, use `LIMIT=N`) |
 
-### What to Evaluate
+### Key Highlights
 
-| Aspect | Where to Look |
-|--------|---------------|
+| Feature | Where to Look |
+|---------|---------------|
 | **Custom MQ Implementation** | `mq/internal/broker/` - Topic-based pub/sub, consumer groups, DLQ |
 | **Unit Tests** | Each service has `*_test.go` files, run `make test-unit` |
 | **Integration Tests** | `tests/integration/` - 24 end-to-end tests |
@@ -321,7 +323,7 @@ make down
 | **Scalability** | Use `make scale-*` commands to test dynamic scaling |
 | **Admission Controller** | Kyverno policies enforce replica limits (try scaling MQ to 2!) |
 | **DLQ & Resilience** | See `mq/README.md` for DLQ architecture |
-| **AI Usage Documentation** | `docs/AI-USAGE.md` - Prompts, outcomes, manual interventions |
+| **Development Process** | `docs/AI-USAGE.md` - AI-assisted development documentation |
 | **Design Decisions** | `docs/DESIGN.md` - Detailed architecture document |
 
 ---
@@ -466,7 +468,7 @@ helm install telemetry oci://registry-1.docker.io/pp010/gpu-telemetry \
 
 # OR download the chart first:
 # Option A: From GitHub release
-wget https://github.com/papanigr/AI-Infra-Assignment/releases/download/v1.0.0/gpu-telemetry-1.0.0.tgz
+wget https://github.com/papanigr/Elastic-GPU-Telemetry/releases/download/v1.0.0/gpu-telemetry-1.0.0.tgz
 helm install telemetry gpu-telemetry-1.0.0.tgz --namespace gpu-telemetry --create-namespace
 
 # Option B: From Helm repository (GitHub Pages)
@@ -986,6 +988,7 @@ cd gateway && make build
 
 ## Documentation
 
+- [Problem Statement](GPU%20Telemetry%20Pipeline%20Message%20Queue.pdf) - Original requirements and specifications
 - [Design Document](docs/DESIGN.md) - Detailed architecture and design decisions
 - [AI Usage](docs/AI-USAGE.md) - How AI assistance was used in development
 - [MQ Service](mq/README.md) - Custom message queue documentation
